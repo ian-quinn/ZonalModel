@@ -1,0 +1,3 @@
+within VEPZO;
+
+connector FBeeperOut = output VEPZO.FBeeper annotation(Icon(coordinateSystem(extent = {{-100, -100}, {100, 100}}, preserveAspectRatio = true, initialScale = 0.1, grid = {10, 10}), graphics = {Ellipse(visible = true, fillPattern = FillPattern.Solid, extent = {{-50, -50}, {50, 50}}), Text(visible = true, textColor = {255, 255, 255}, extent = {{-40, -40}, {40, 40}}, textString = "F")}), Diagram(coordinateSystem(extent = {{-100, -100}, {100, 100}}, preserveAspectRatio = true, initialScale = 0.1, grid = {10, 10}), graphics = {Rectangle(visible = true, lineColor = {128, 128, 128}, fillColor = {128, 128, 128}, fillPattern = FillPattern.Solid, extent = {{-40, -40}, {40, 40}})}));
