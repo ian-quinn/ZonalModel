@@ -129,7 +129,7 @@ class Zone(object):
 class Flow(object):
     def __init__(self, idx, direction, idxA, idxB, portA, portB):
         self.idxIn = idxA
-        self.idxOut = idxA
+        self.idxOut = idxB
         self.portIn = portA
         self.portOut = portB
         self.name = "flow" + str(idx)
@@ -148,15 +148,17 @@ class  Wall(object):
         
 
 # global settings for user input
-visualizeShadow = False      # generate a movie flip for solar distribution
+visualizeShadow = True      # generate a movie flip for solar distribution
 useActuralAmbient = True    # use ambient temperature from EPW file
+useAdiabaticWall = False     # set adiabatic boundary condition to all walls
+stopTime = 86399
 
 x = 10      # grid on abscissa
 y = 10      # grid on ordinate
 z = 3       # grid on vertical
 
-dim_x = 30  # abscissa dimension of the box
-dim_y = 30  # ordinate dimension of the box
+dim_x = 20  # abscissa dimension of the box
+dim_y = 20  # ordinate dimension of the box
 dim_z = 3   # vertical dimension of the box
 
 gap = 0.5   # gap between the sub-surface window to its hosting surface
@@ -164,10 +166,14 @@ sill = 1    # height of the window sill
 h = 1.5     # window height
 Q = 1200    # general beam radiation intensity
 
-capacity = 800      # general heat capacity of wall material
-resistance = 0.26   # general thermal resistance of wall material
+capacity = 10000      # general heat capacity of wall material (J/K*m2) (cp * rho * thickness)
+resistance = 0.635   # general thermal resistance of wall material (m2*K/W) (thickness / conductance + 1 / convection rate)
+temp_init = 276.95
 #ambientTemp = "0, 278.25; 3600, 278.95; 7200, 280.45; 10800, 281.55; 14400, 282.35; 18000, 282.75; 21600, 282.95; 25200, 283.15; 28800, 283.35; 32400, 283.55; 36000, 283.35; 39600, 282.75; 43200, 281.95"
 ambientTemp = "0, 276.95; 3600, 276.65; 7200, 276.35; 10800, 275.95; 14400, 275.55; 18000, 275.25; 21600, 275.15; 25200, 275.25; 28800, 275.35; 32400, 275.55; 36000, 275.85; 39600, 276.25; 43200, 276.85; 46800, 277.65; 50400, 278.65; 54000, 279.75; 57600, 280.35; 61200, 280.15; 64800, 279.55; 68400, 279.55; 68400, 278.85; 72000, 278.15; 75600, 277.65; 79200, 277.35; 82800, 277.15; 86400, 277.15"
+#ambientTemp = "0, 275.15; 3600, 275.25; 7200, 275.35; 10800, 275.55; 14400, 275.85; 18000, 276.25; 21600, 276.85; 25200, 277.65; 28800, 278.65; 32400, 279.75; 36000, 280.35; 39600, 280.15; 43200, 279.55"
+staticTemp = "0, 275.15; 3600, 275.15; 7200, 275.15; 10800, 275.15; 14400, 275.15; 18000, 275.15; 21600, 275.15; 25200, 275.15; 28800, 275.15; 32400, 275.15; 36000, 275.15; 39600, 275.15; 43200, 275.15"
+
 
 time_start = datetime.datetime.strptime("2022-03-07 00:00:00", "%Y-%m-%d %H:%M:%S")
 time_end = datetime.datetime.strptime("2022-03-07 23:59:59", "%Y-%m-%d %H:%M:%S")
@@ -353,29 +359,35 @@ for zone in zonelist:
 
 # module serialization
 fo = open("Box.mo", "w")
+fo.write("within VEPZO.Samples;\n")
 fo.write("model Box\n")
 if useActuralAmbient:
     fo.write("  Modelica.Blocks.Sources.TimeTable ambient(table = [{0}]);\n".format(ambientTemp))
 for zone in zonelist:
     if zone.idx < x * y:
-        fo.write("  Zone {0}(IsSource = true, dx = {1}, dy = {2}, dz = {3});\n".
-            format(zone.name, dim_x/x, dim_y/y, dim_z/z))
+        fo.write("  Zone {0}(IsSource = true, dx = {1}, dy = {2}, dz = {3}, T_0 = {4});\n".
+            format(zone.name, dim_x/x, dim_y/y, dim_z/z, temp_init))
         fo.write("  Modelica.Blocks.Sources.TimeTable solar{0}(table = [{1}]);\n".
             format(zone.idx, ZipTimeTable(times, solars[zone.idx])))
         fo.write("  Modelica.Thermal.HeatTransfer.Sources.PrescribedHeatFlow heatFlow{0};\n".format(zone.idx))
     else:
-        fo.write("  Zone {0}(dx = {1}, dy = {2}, dz = {3});\n".format(zone.name, dim_x/x, dim_y/y, dim_z/z))
+        fo.write("  Zone {0}(dx = {1}, dy = {2}, dz = {3}, T_0 = {4});\n".format(zone.name, dim_x/x, dim_y/y, dim_z/z, temp_init))
 
 for flow in flowlist:
     fo.write("  Flow {0}(Direction = {1});\n".format(flow.name, flow.direction))
 for wall in walllist:
+    area = dim_y / y * (dim_z / z)
+    if wall.direction == 1:
+        area = dim_x / x * (dim_z / z)
+    else:
+        area = dim_x / x * (dim_y / y)
     if wall.idxIn in adiabaticZonelist and wall.direction == 2:
         fo.write("  Wall {0}(Direction = {1});\n".format(wall.name, wall.direction))
     else:
         fo.write("  Wall {0}(Direction = {1}, IsSource = true);\n".format(wall.name, wall.direction))
         fo.write("  Modelica.Thermal.HeatTransfer.Sources.PrescribedTemperature temp{0};".format(wall.idx))
-        fo.write("  Modelica.Thermal.HeatTransfer.Components.ThermalResistor wallR{0}(R = {1});".format(wall.idx, resistance))
-        fo.write("  Modelica.Thermal.HeatTransfer.Components.HeatCapacitor wallC{0}(C = {1});".format(wall.idx, capacity))
+        fo.write("  Modelica.Thermal.HeatTransfer.Components.ThermalResistor wallR{0}(R = {1});".format(wall.idx, resistance / area))
+        fo.write("  Modelica.Thermal.HeatTransfer.Components.HeatCapacitor wallC{0}(C = {1}, T.start = {2});".format(wall.idx, capacity * area, temp_init))
 
 fo.write("equation\n")
 for flow in flowlist:
@@ -383,7 +395,7 @@ for flow in flowlist:
     if flow.direction == 1: axis = "y"
     if flow.direction == 2: axis = "z"
     fo.write("  connect({0}.port_a, {1}.port_{2}1);\n".format(flow.name, "zone" + str(flow.idxIn), axis))
-    fo.write("  connect({0}.port_b, {1}.port_{2}2);\n".format(flow.name, "zone" + str(flow.idxIn), axis))
+    fo.write("  connect({0}.port_b, {1}.port_{2}2);\n".format(flow.name, "zone" + str(flow.idxOut), axis))
 for wall in walllist:
     axis = "x"
     if wall.direction == 1: axis = "y"
@@ -406,7 +418,8 @@ for wall in walllist:
         fo.write("  connect(temp{0}.port, wallR{1}.port_b);\n".format(wall.idx, wall.idx))
         fo.write("  connect(wallR{0}.port_a, wall{1}.port_s);\n".format(wall.idx, wall.idx))
         fo.write("  connect(wallC{0}.port, wallR{1}.port_a);\n".format(wall.idx, wall.idx))
-        
+# expriment configuration only for Wolfram
+fo.write("annotation(experiment(StopTime = {0}, __Wolfram_NumberOfIntervals = -1));".format(stopTime))
         
 fo.write("end Box;\n")
 fo.close()

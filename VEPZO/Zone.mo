@@ -6,7 +6,7 @@ model Zone "Finite volume"
   parameter Modelica.SIunits.Length dx = 1;
   parameter Modelica.SIunits.Length dy = 1;
   parameter Modelica.SIunits.Length dz = 1;
-  parameter Medium.Temperature T_0 = Modelica.SIunits.Conversions.from_degC(5.1);
+  parameter Medium.Temperature T_0 = Modelica.SIunits.Conversions.from_degC(20);
   parameter Medium.AbsolutePressure p_0 = 101325;
   parameter Boolean IsSource = false;
   //parameter Boolean Is3D;
