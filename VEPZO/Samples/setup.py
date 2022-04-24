@@ -151,14 +151,13 @@ class  Wall(object):
 visualizeShadow = True      # generate a movie flip for solar distribution
 useActuralAmbient = True    # use ambient temperature from EPW file
 useAdiabaticWall = False     # set adiabatic boundary condition to all walls
-stopTime = 86399
 
-x = 10      # grid on abscissa
-y = 10      # grid on ordinate
+x = 7      # grid on abscissa
+y = 7      # grid on ordinate
 z = 3       # grid on vertical
 
-dim_x = 20  # abscissa dimension of the box
-dim_y = 20  # ordinate dimension of the box
+dim_x = 21  # abscissa dimension of the box
+dim_y = 21  # ordinate dimension of the box
 dim_z = 3   # vertical dimension of the box
 
 gap = 0.5   # gap between the sub-surface window to its hosting surface
@@ -168,25 +167,47 @@ Q = 1200    # general beam radiation intensity
 
 capacity = 10000      # general heat capacity of wall material (J/K*m2) (cp * rho * thickness)
 resistance = 0.635   # general thermal resistance of wall material (m2*K/W) (thickness / conductance + 1 / convection rate)
-temp_init = 276.95
-#ambientTemp = "0, 278.25; 3600, 278.95; 7200, 280.45; 10800, 281.55; 14400, 282.35; 18000, 282.75; 21600, 282.95; 25200, 283.15; 28800, 283.35; 32400, 283.55; 36000, 283.35; 39600, 282.75; 43200, 281.95"
-ambientTemp = "0, 276.95; 3600, 276.65; 7200, 276.35; 10800, 275.95; 14400, 275.55; 18000, 275.25; 21600, 275.15; 25200, 275.25; 28800, 275.35; 32400, 275.55; 36000, 275.85; 39600, 276.25; 43200, 276.85; 46800, 277.65; 50400, 278.65; 54000, 279.75; 57600, 280.35; 61200, 280.15; 64800, 279.55; 68400, 279.55; 68400, 278.85; 72000, 278.15; 75600, 277.65; 79200, 277.35; 82800, 277.15; 86400, 277.15"
-#ambientTemp = "0, 275.15; 3600, 275.25; 7200, 275.35; 10800, 275.55; 14400, 275.85; 18000, 276.25; 21600, 276.85; 25200, 277.65; 28800, 278.65; 32400, 279.75; 36000, 280.35; 39600, 280.15; 43200, 279.55"
-staticTemp = "0, 275.15; 3600, 275.15; 7200, 275.15; 10800, 275.15; 14400, 275.15; 18000, 275.15; 21600, 275.15; 25200, 275.15; 28800, 275.15; 32400, 275.15; 36000, 275.15; 39600, 275.15; 43200, 275.15"
 
-
-time_start = datetime.datetime.strptime("2022-03-07 00:00:00", "%Y-%m-%d %H:%M:%S")
-time_end = datetime.datetime.strptime("2022-03-07 23:59:59", "%Y-%m-%d %H:%M:%S")
 latitude = 33
 longitude = 122
 utc_offset = 8      # time zone
 timestep = 10       # interval to update the solar radiation (in minute)
 
+epw_path = "CHN_SH_Shanghai.583620_CSWD.epw"
+time_init = datetime.datetime.strptime("2022-01-01 00:00:00", "%Y-%m-%d %H:%M:%S")
+time_start = datetime.datetime.strptime("2022-01-07 00:00:00", "%Y-%m-%d %H:%M:%S")
+time_end = datetime.datetime.strptime("2022-01-07 23:59:59", "%Y-%m-%d %H:%M:%S")
+stopTime = (time_end - time_start).total_seconds()
+
+series_temp = []
+series_time = []
+timeticks = 0
+f = open(epw_path, mode="r")
+for line in f.readlines():
+    datalist = line.split(',')
+    if (len(datalist) == 35):
+        timeticks = timeticks + 1
+        if (timeticks * 3600 > (time_start - time_init).total_seconds() and \
+            (timeticks - 1) * 3600 < (time_end - time_init).total_seconds()):
+            if (len(series_temp) == 0):
+                series_time.append(0.0)
+                series_temp.append(float(datalist[6]) + 273.15)
+            else:
+                series_time.append((timeticks - 1) * 3600 - (time_start - time_init).total_seconds())
+                series_temp.append(float(datalist[6]))
+
+temp_ambient = ""
+for i in range(len(series_temp)):
+    temp_ambient = temp_ambient + str(series_time[i]) + ", " + str(series_temp[i])
+    if i < len(series_temp) - 1:
+        temp_ambient = temp_ambient + "; "
+temp_init = series_temp[0]
+
 
 # shadow calculation
 delta = datetime.timedelta(minutes=timestep)
-zeltas = []         # in degree
-thetas = []         # in degree
+zeltas = []         # in degree North-0 East-90 South-180 West-270
+thetas = []         # in degree Horizontal-0 Perpendicular-90
 times = []          # time stamps in second
 time_ellapse = 0    # accumulated time in second
 time_current = time_start
@@ -212,6 +233,7 @@ for i in range(len(zeltas)):
     # initialize to zero
     for j in range(len(grids)):
             solars[j].append(0)
+    # activate the south wall
     if zeltas[i] > 90 and zeltas[i] < 270 and thetas[i] > 0:
         project_x = math.tan(math.radians(thetas[i])) * math.tan(math.radians(zeltas[i] - 90))
         project_y = math.tan(math.radians(thetas[i]))
@@ -228,48 +250,51 @@ for i in range(len(zeltas)):
             # print(list(sect.exterior.coords))
             # print(sect.area)
             solars[j][i] += sect.area / area * Q * math.sin(math.radians(thetas[i])) * math.sin(math.radians(zeltas[i] - 90))
-    if zeltas[i] > 0 and zeltas[i] < 180 and thetas[i] > 0:
-        project_x = math.tan(math.radians(thetas[i])) * math.tan(math.radians(zeltas[i]))
-        project_y = math.tan(math.radians(thetas[i]))
-        shadow = Polygon([
-            [dim_x - sill / project_y, gap - sill / project_x], 
-            [dim_y - sill / project_y, dim_y - gap - sill / project_x], 
-            [dim_y - (sill + h) / project_y, dim_y - gap - (sill + h) / project_x], 
-            [dim_x - (sill + h) / project_y, gap - (sill + h) / project_x]
-            ])
-        area = (dim_y - 2 * gap) * h / math.tan(math.radians(thetas[i]))
-        for j in range(len(grids)):
-            sect = shadow.intersection(grids[j])
-            solars[j][i] += sect.area / area * Q * math.sin(math.radians(thetas[i])) * math.sin(math.radians(zeltas[i]))
-    if zeltas[i] > 0 and zeltas[i] < 90 and thetas[i] > 0 or zeltas[i] > 270 and zeltas[i] < 360 and thetas[i] > 0:
-        zelta = zeltas[i] + 90
-        if zeltas[i] > 270 and zeltas[i] < 360:
-            zelta = zeltas[i] - 270 
-        project_x = math.tan(math.radians(thetas[i])) * math.tan(math.radians(zelta))
-        project_y = math.tan(math.radians(thetas[i]))
-        shadow = Polygon([
-            [dim_x - gap - sill / project_x, dim_y - sill / project_y], 
-            [gap - sill / project_x, dim_y - sill / project_y], 
-            [gap - (sill + h) / project_x, dim_y - (sill + h) / project_y], 
-            [dim_x - gap - (sill + h) / project_x, dim_y - (sill + h) / project_y]
-            ])
-        area = (dim_x - 2 * gap) * h / math.tan(math.radians(thetas[i]))
-        for j in range(len(grids)):
-            sect = shadow.intersection(grids[j])
-            solars[j][i] += sect.area / area * Q * math.sin(math.radians(thetas[i])) * math.sin(math.radians(zelta))
-    if zeltas[i] > 180 and zeltas[i] < 360 and thetas[i] > 0:
-        project_x = math.tan(math.radians(thetas[i])) * math.tan(math.radians(zeltas[i] - 180))
-        project_y = math.tan(math.radians(thetas[i]))
-        shadow = Polygon([
-            [sill / project_y, dim_y - gap - sill / project_x], 
-            [sill / project_y, gap - sill / project_x], 
-            [(sill + h) / project_y, gap - (sill + h) / project_x], 
-            [(sill + h) / project_y, dim_y - gap - (sill + h) / project_x]
-            ])
-        area = (dim_y - 2 * gap) * h / math.tan(math.radians(thetas[i]))
-        for j in range(len(grids)):
-            sect = shadow.intersection(grids[j])
-            solars[j][i] += sect.area / area * Q * math.sin(math.radians(thetas[i])) * math.sin(math.radians(zeltas[i] - 180))
+    # activate the east wall
+    # if zeltas[i] > 0 and zeltas[i] < 180 and thetas[i] > 0:
+    #     project_x = math.tan(math.radians(thetas[i])) * math.tan(math.radians(zeltas[i]))
+    #     project_y = math.tan(math.radians(thetas[i]))
+    #     shadow = Polygon([
+    #         [dim_x - sill / project_y, gap - sill / project_x], 
+    #         [dim_y - sill / project_y, dim_y - gap - sill / project_x], 
+    #         [dim_y - (sill + h) / project_y, dim_y - gap - (sill + h) / project_x], 
+    #         [dim_x - (sill + h) / project_y, gap - (sill + h) / project_x]
+    #         ])
+    #     area = (dim_y - 2 * gap) * h / math.tan(math.radians(thetas[i]))
+    #     for j in range(len(grids)):
+    #         sect = shadow.intersection(grids[j])
+    #         solars[j][i] += sect.area / area * Q * math.sin(math.radians(thetas[i])) * math.sin(math.radians(zeltas[i]))
+    # activate the north wall
+    # if zeltas[i] > 0 and zeltas[i] < 90 and thetas[i] > 0 or zeltas[i] > 270 and zeltas[i] < 360 and thetas[i] > 0:
+    #     zelta = zeltas[i] + 90
+    #     if zeltas[i] > 270 and zeltas[i] < 360:
+    #         zelta = zeltas[i] - 270 
+    #     project_x = math.tan(math.radians(thetas[i])) * math.tan(math.radians(zelta))
+    #     project_y = math.tan(math.radians(thetas[i]))
+    #     shadow = Polygon([
+    #         [dim_x - gap - sill / project_x, dim_y - sill / project_y], 
+    #         [gap - sill / project_x, dim_y - sill / project_y], 
+    #         [gap - (sill + h) / project_x, dim_y - (sill + h) / project_y], 
+    #         [dim_x - gap - (sill + h) / project_x, dim_y - (sill + h) / project_y]
+    #         ])
+    #     area = (dim_x - 2 * gap) * h / math.tan(math.radians(thetas[i]))
+    #     for j in range(len(grids)):
+    #         sect = shadow.intersection(grids[j])
+    #         solars[j][i] += sect.area / area * Q * math.sin(math.radians(thetas[i])) * math.sin(math.radians(zelta))
+    # activate the west wall
+    # if zeltas[i] > 180 and zeltas[i] < 360 and thetas[i] > 0:
+    #     project_x = math.tan(math.radians(thetas[i])) * math.tan(math.radians(zeltas[i] - 180))
+    #     project_y = math.tan(math.radians(thetas[i]))
+    #     shadow = Polygon([
+    #         [sill / project_y, dim_y - gap - sill / project_x], 
+    #         [sill / project_y, gap - sill / project_x], 
+    #         [(sill + h) / project_y, gap - (sill + h) / project_x], 
+    #         [(sill + h) / project_y, dim_y - gap - (sill + h) / project_x]
+    #         ])
+    #     area = (dim_y - 2 * gap) * h / math.tan(math.radians(thetas[i]))
+    #     for j in range(len(grids)):
+    #         sect = shadow.intersection(grids[j])
+    #         solars[j][i] += sect.area / area * Q * math.sin(math.radians(thetas[i])) * math.sin(math.radians(zeltas[i] - 180))
 
 
 # visualize radiation intensity on the floorplan
@@ -299,7 +324,7 @@ if visualizeShadow:
     class LoopingPillowWriter(animation.PillowWriter):
         def finish(self):
             self._frames[0].save(
-                self._outfile, save_all=True, append_images=self._frames[1:],
+                self.outfile, save_all=True, append_images=self._frames[1:],
                 duration=int(1000 / self.fps), loop=0)
     img_ani.save(r"animation.gif", writer=LoopingPillowWriter(fps=20)) 
     # img_ani.save(r"animation.gif", writer=animation.PillowWriter(fps=30))
@@ -358,11 +383,12 @@ for zone in zonelist:
         adiabaticZonelist.append(zone.idx)
 
 # module serialization
-fo = open("Box.mo", "w")
+model_name = "Square7_24h"
+fo = open(model_name + ".mo", "w")
 fo.write("within VEPZO.Samples;\n")
-fo.write("model Box\n")
+fo.write("model " + model_name + "\n")
 if useActuralAmbient:
-    fo.write("  Modelica.Blocks.Sources.TimeTable ambient(table = [{0}]);\n".format(ambientTemp))
+    fo.write("  Modelica.Blocks.Sources.TimeTable ambient(table = [{0}]);\n".format(temp_ambient))
 for zone in zonelist:
     if zone.idx < x * y:
         fo.write("  Zone {0}(IsSource = true, dx = {1}, dy = {2}, dz = {3}, T_0 = {4});\n".
@@ -419,7 +445,11 @@ for wall in walllist:
         fo.write("  connect(wallR{0}.port_a, wall{1}.port_s);\n".format(wall.idx, wall.idx))
         fo.write("  connect(wallC{0}.port, wallR{1}.port_a);\n".format(wall.idx, wall.idx))
 # expriment configuration only for Wolfram
-fo.write("annotation(experiment(StopTime = {0}, __Wolfram_NumberOfIntervals = -1));".format(stopTime))
+fo.write("annotation(experiment(StopTime = {0}, __Wolfram_NumberOfIntervals = -1));\n".format(stopTime))
         
-fo.write("end Box;\n")
+fo.write("end " + model_name + ";\n")
+fo.close()
+
+fo = open("package.order", "a")
+fo.write(model_name + "\n")
 fo.close()
