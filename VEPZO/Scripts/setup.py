@@ -104,8 +104,34 @@ def getAZ(struct_time, latitude, longitude, utc_offset):
 # assitants
 def RetrieveId(coord):
     return x * y * coord[2] + y * coord[1] + coord[0]
+
 def RetrieveCoord(id):
     return [id % (x * y) % x, id % (x * y) // x, id // (x * y)]
+
+def CheckIfAdjacencyUnderMask(id, mask, portId):
+    pt = RetrieveCoord(id)
+    if portId == 0:
+        if pt[0] - 1 >= 0:
+            adj = [pt[0] - 1, pt[1]]
+            if (mask[y - adj[1] - 1, adj[0]] == 0):
+                return True
+    if portId == 1:
+        if pt[0] + 1 < x:
+            adj = [pt[0] + 1, pt[1]]
+            if (mask[y - adj[1] - 1, adj[0]] == 0):
+                return True
+    if portId == 2:
+        if pt[1] - 1 >= 0:
+            adj = [pt[0], pt[1] - 1]
+            if (mask[y - adj[1] - 1, adj[0]] == 0):
+                return True
+    if portId == 3:
+        if pt[1] + 1 < y:
+            adj = [pt[0], pt[1] + 1]
+            if (mask[y - adj[1] - 1, adj[0]] == 0):
+                return True
+    return False
+
 def ZipTimeTable(time, value):
     content = ""
     for i in range(len(time)):
@@ -126,6 +152,7 @@ class Zone(object):
     def serialize(self):
         print("zone{0} ({1}, {2}, {3})".format(
             self.idx, self.coord[0], self.coord[1], self.coord[2]))
+
 class Flow(object):
     def __init__(self, idx, direction, idxA, idxB, portA, portB):
         self.idxIn = idxA
@@ -136,6 +163,7 @@ class Flow(object):
         self.direction = direction
     def serialize(self):
         print("flow{0} direction{1} {2}/{3}".format(self.idxIn, self.direction, self.idxIn, self.idxOut))
+
 class  Wall(object):
     def __init__(self, idx, direction, idxA, portA):
         self.idxIn = idxA
@@ -160,23 +188,33 @@ dim_x = 21  # abscissa dimension of the box
 dim_y = 21  # ordinate dimension of the box
 dim_z = 3   # vertical dimension of the box
 
+# mask by default
+# mask = np.array([1 for i in range(x * y)])
+# mask = mask.reshape(x, y)
+# customize your mask
+# mask = np.array([1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0,0,1,1,1,1,0,0,0,1,1,1,1,0,0,0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1])
+mask = np.array([1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0,0,0,0,0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1])
+mask = mask.reshape(x, y)
+print(mask)
+
 gap = 0.5   # gap between the sub-surface window to its hosting surface
 sill = 1    # height of the window sill
 h = 1.5     # window height
-Q = 1200    # general beam radiation intensity
+Q = 1000    # general beam radiation intensity
+Q_in = 0
 
-capacity = 10000      # general heat capacity of wall material (J/K*m2) (cp * rho * thickness)
-resistance = 0.635   # general thermal resistance of wall material (m2*K/W) (thickness / conductance + 1 / convection rate)
+capacity = 100000      # general heat capacity of wall material (J/K*m2) (cp * rho * thickness)
+resistance = 1   # general thermal resistance of wall material (m2*K/W) (thickness / conductance + 1 / convection rate)
 
 latitude = 33
 longitude = 122
 utc_offset = 8      # time zone
-timestep = 10       # interval to update the solar radiation (in minute)
+timestep = 20       # interval to update the solar radiation (in minute)
 
 epw_path = "CHN_SH_Shanghai.583620_CSWD.epw"
 time_init = datetime.datetime.strptime("2022-01-01 00:00:00", "%Y-%m-%d %H:%M:%S")
-time_start = datetime.datetime.strptime("2022-01-07 00:00:00", "%Y-%m-%d %H:%M:%S")
-time_end = datetime.datetime.strptime("2022-01-07 23:59:59", "%Y-%m-%d %H:%M:%S")
+time_start = datetime.datetime.strptime("2022-07-20 00:00:00", "%Y-%m-%d %H:%M:%S")
+time_end = datetime.datetime.strptime("2022-07-20 23:59:59", "%Y-%m-%d %H:%M:%S")
 stopTime = (time_end - time_start).total_seconds()
 
 series_temp = []
@@ -191,10 +229,10 @@ for line in f.readlines():
             (timeticks - 1) * 3600 < (time_end - time_init).total_seconds()):
             if (len(series_temp) == 0):
                 series_time.append(0.0)
-                series_temp.append(float(datalist[6]) + 273.15)
+                series_temp.append(round(float(datalist[6]) + 273.15, 2))
             else:
                 series_time.append((timeticks - 1) * 3600 - (time_start - time_init).total_seconds())
-                series_temp.append(float(datalist[6]))
+                series_temp.append(round(float(datalist[6]) + 273.15, 2))
 
 temp_ambient = ""
 for i in range(len(series_temp)):
@@ -232,7 +270,10 @@ for i in range(x * y):
 for i in range(len(zeltas)):
     # initialize to zero
     for j in range(len(grids)):
-            solars[j].append(0)
+        if (i % (1440/timestep) > 9/24 * (1440/timestep) and i % (1440/timestep) < 17/24 * (1440/timestep)):
+            solars[j].append(Q_in)
+        else:
+            solars[j].append(0.1 * Q_in)
     # activate the south wall
     if zeltas[i] > 90 and zeltas[i] < 270 and thetas[i] > 0:
         project_x = math.tan(math.radians(thetas[i])) * math.tan(math.radians(zeltas[i] - 90))
@@ -308,6 +349,7 @@ if visualizeShadow:
             if solars[j][i] > maxRadiation:
                 maxRadiation = solars[j][i]
         snapshot = np.array(temp).reshape((x, y))
+        snapshot = snapshot * mask
         snapshots.append(snapshot)
 
     fig = plt.figure()
@@ -331,46 +373,68 @@ if visualizeShadow:
     # img_ani.save(r"animation.gif", writer='imagemagick')
 
 
+# indoor load summary
+
+
 # module generation
 zonelist = [] # list of module Zone
 for k in range(z):
     for j in range(y):
         for i in range(x):
-            zonelist.append(
-                Zone(len(zonelist), i, j, k))
+            #zonelist.append(Zone(len(zonelist), i, j, k))
+            if mask[y - j - 1][i]:
+                zonelist.append(Zone(len(zonelist), i, j, k))
+            else:
+                zonelist.append(None)
+# zonecheck = ""
+# for zone in zonelist:
+#     if (zone == None):
+#         zonecheck += " 0"
+#     else:
+#         zonecheck += " 1"
+# print(zonecheck)
 
 flowlist = [] # list of module Flow
 for i in range(len(zonelist)):
     coords = RetrieveCoord(i)
     if coords[0] < x - 1:
-        targetId = RetrieveId([coords[0] + 1, coords[1], coords[2]])
-        flowlist.append(Flow(len(flowlist), 0, targetId, i, 0, 1))
-        zonelist[i].connect[1] = 1
-        zonelist[i].port[1] = flowlist[-1].name
-        zonelist[targetId].connect[0] = 1
-        zonelist[targetId].port[0] = zonelist[i].port[1]
+        print("looping " + str(coords[0]) + " | " + str(coords[1]))
+        if (zonelist[i] != None and mask[y - coords[1] - 1][coords[0] + 1] == 1):
+            targetId = RetrieveId([coords[0] + 1, coords[1], coords[2]])
+            flowlist.append(Flow(len(flowlist), 0, targetId, i, 0, 1))
+            zonelist[i].connect[1] = 1
+            zonelist[i].port[1] = flowlist[-1].name
+            zonelist[targetId].connect[0] = 1
+            zonelist[targetId].port[0] = zonelist[i].port[1]
     if coords[1] < y - 1:
-        flowlist.append(Flow(len(flowlist), 1, RetrieveId([coords[0], coords[1] + 1, coords[2]]), i, 2, 3))
-        zonelist[i].connect[3] = 1
-        zonelist[i].port[3] = flowlist[-1].name
-        zonelist[RetrieveId([coords[0], coords[1] + 1, coords[2]])].connect[2] = 1
-        zonelist[RetrieveId([coords[0], coords[1] + 1, coords[2]])].port[2] = zonelist[i].port[3]
+        if (zonelist[i] != None and mask[y - coords[1] - 2][coords[0]] == 1):
+            flowlist.append(Flow(len(flowlist), 1, RetrieveId([coords[0], coords[1] + 1, coords[2]]), i, 2, 3))
+            zonelist[i].connect[3] = 1
+            zonelist[i].port[3] = flowlist[-1].name
+            zonelist[RetrieveId([coords[0], coords[1] + 1, coords[2]])].connect[2] = 1
+            zonelist[RetrieveId([coords[0], coords[1] + 1, coords[2]])].port[2] = zonelist[i].port[3]
     if coords[2] < z - 1:
-        flowlist.append(Flow(len(flowlist), 2, RetrieveId([coords[0], coords[1], coords[2] + 1]), i, 4, 5))
-        zonelist[i].connect[5] = 1
-        zonelist[i].port[5] = flowlist[-1].name
-        zonelist[RetrieveId([coords[0], coords[1], coords[2] + 1])].connect[4] = 1
-        zonelist[RetrieveId([coords[0], coords[1], coords[2] + 1])].port[4] = zonelist[i].port[5]
+        if (zonelist[i] != None):
+            flowlist.append(Flow(len(flowlist), 2, RetrieveId([coords[0], coords[1], coords[2] + 1]), i, 4, 5))
+            zonelist[i].connect[5] = 1
+            zonelist[i].port[5] = flowlist[-1].name
+            zonelist[RetrieveId([coords[0], coords[1], coords[2] + 1])].connect[4] = 1
+            zonelist[RetrieveId([coords[0], coords[1], coords[2] + 1])].port[4] = zonelist[i].port[5]
+
 for zone in zonelist:
-    chain = ""
-    for i in range(len(zone.connect)):
-        chain += ", " + str(zone.connect[i])
-    # print(chain)
+    if (zone != None):
+        chain = ""
+        for i in range(len(zone.connect)):
+            chain += ", " + str(zone.connect[i])
+        print(chain)
 
 walllist = [] # list of module Wall
 for i in range(len(zonelist)):
+    if (zonelist[i] == None):
+        continue
     connectors = zonelist[i].connect
     for j in range(len(connectors)):
+        # any exposed connector (exposed) will be assigned with a wall
         if not connectors[j]:
             wallname = "wall" + str(len(walllist))
             walllist.append(Wall(len(walllist), j // 2, i, j))
@@ -379,41 +443,53 @@ for i in range(len(zonelist)):
 # locate the zone at the bottom and the top
 adiabaticZonelist = [] # index list for top and bottom zones
 for zone in zonelist:
-    if zone.idx < x * y or zone.idx >= (z - 1) * x * y:
-        adiabaticZonelist.append(zone.idx)
+    if zone != None:
+        if zone.idx < x * y or zone.idx >= (z - 1) * x * y:
+            adiabaticZonelist.append(zone.idx)
 
-# module serialization
-model_name = "Square7_24h"
+
+############################# module serialization #################################
+
+model_name = "Square7_hole_s_lowrc"
 fo = open(model_name + ".mo", "w")
 fo.write("within VEPZO.Samples;\n")
 fo.write("model " + model_name + "\n")
 if useActuralAmbient:
     fo.write("  Modelica.Blocks.Sources.TimeTable ambient(table = [{0}]);\n".format(temp_ambient))
 for zone in zonelist:
-    if zone.idx < x * y:
-        fo.write("  Zone {0}(IsSource = true, dx = {1}, dy = {2}, dz = {3}, T_0 = {4});\n".
-            format(zone.name, dim_x/x, dim_y/y, dim_z/z, temp_init))
-        fo.write("  Modelica.Blocks.Sources.TimeTable solar{0}(table = [{1}]);\n".
-            format(zone.idx, ZipTimeTable(times, solars[zone.idx])))
-        fo.write("  Modelica.Thermal.HeatTransfer.Sources.PrescribedHeatFlow heatFlow{0};\n".format(zone.idx))
-    else:
-        fo.write("  Zone {0}(dx = {1}, dy = {2}, dz = {3}, T_0 = {4});\n".format(zone.name, dim_x/x, dim_y/y, dim_z/z, temp_init))
+    if zone != None:
+        if zone.idx < x * y:
+            fo.write("  Zone {0}(IsSource = true, dx = {1}, dy = {2}, dz = {3}, T_0 = {4});\n".
+                format(zone.name, dim_x/x, dim_y/y, dim_z/z, temp_init))
+            fo.write("  Modelica.Blocks.Sources.TimeTable solar{0}(table = [{1}]);\n".
+                format(zone.idx, ZipTimeTable(times, solars[zone.idx])))
+            fo.write("  Modelica.Thermal.HeatTransfer.Sources.PrescribedHeatFlow heatFlow{0};\n".format(zone.idx))
+        else:
+            fo.write("  Zone {0}(dx = {1}, dy = {2}, dz = {3}, T_0 = {4});\n".format(zone.name, dim_x/x, dim_y/y, dim_z/z, temp_init))
 
 for flow in flowlist:
     fo.write("  Flow {0}(Direction = {1});\n".format(flow.name, flow.direction))
 for wall in walllist:
+    print("Coming to wall" + str(walllist.index(wall)))
     area = dim_y / y * (dim_z / z)
     if wall.direction == 1:
         area = dim_x / x * (dim_z / z)
     else:
         area = dim_x / x * (dim_y / y)
+
     if wall.idxIn in adiabaticZonelist and wall.direction == 2:
+        print("at bottom/up")
         fo.write("  Wall {0}(Direction = {1});\n".format(wall.name, wall.direction))
-    else:
-        fo.write("  Wall {0}(Direction = {1}, IsSource = true);\n".format(wall.name, wall.direction))
-        fo.write("  Modelica.Thermal.HeatTransfer.Sources.PrescribedTemperature temp{0};".format(wall.idx))
-        fo.write("  Modelica.Thermal.HeatTransfer.Components.ThermalResistor wallR{0}(R = {1});".format(wall.idx, resistance / area))
-        fo.write("  Modelica.Thermal.HeatTransfer.Components.HeatCapacitor wallC{0}(C = {1}, T.start = {2});".format(wall.idx, capacity * area, temp_init))
+        continue
+    if CheckIfAdjacencyUnderMask(wall.idxIn, mask, wall.portIn):
+        print("at hole boundary")
+        fo.write("  Wall {0}(Direction = {1});\n".format(wall.name, wall.direction))
+        continue
+    print("normal one")
+    fo.write("  Wall {0}(Direction = {1}, IsSource = true);\n".format(wall.name, wall.direction))
+    fo.write("  Modelica.Thermal.HeatTransfer.Sources.PrescribedTemperature temp{0};\n".format(wall.idx))
+    fo.write("  Modelica.Thermal.HeatTransfer.Components.ThermalResistor wallR{0}(R = {1});\n".format(wall.idx, resistance / area))
+    fo.write("  Modelica.Thermal.HeatTransfer.Components.HeatCapacitor wallC{0}(C = {1}, T.start = {2});\n".format(wall.idx, capacity * area, temp_init))
 
 fo.write("equation\n")
 for flow in flowlist:
@@ -432,14 +508,16 @@ for flow in flowlist:
     fo.write("  connect({0}.i[1], {1}.o);\n".format(flow.name, "zone" + str(flow.idxOut)))
     fo.write("  connect({0}.i[2], {1}.o);\n".format(flow.name, "zone" + str(flow.idxIn)))
 for zone in zonelist:
-    if zonelist.index(zone) < x * y:
-        fo.write("  connect({0}.port_s, heatFlow{1}.port);\n".format(zone.name, zone.idx))
-        fo.write("  connect(solar{0}.y, heatFlow{1}.Q_flow);\n".format(zone.idx, zone.idx))
-    for i in range(6):
-        fo.write("  connect({0}.i[{1}], {2}.o);\n".format(zone.name, i+1, zone.port[i]))
+    if zone != None:
+        if zonelist.index(zone) < x * y:
+            fo.write("  connect({0}.port_s, heatFlow{1}.port);\n".format(zone.name, zone.idx))
+            fo.write("  connect(solar{0}.y, heatFlow{1}.Q_flow);\n".format(zone.idx, zone.idx))
+        for i in range(6):
+            fo.write("  connect({0}.i[{1}], {2}.o);\n".format(zone.name, i+1, zone.port[i]))
 for wall in walllist:
     fo.write("  connect({0}.i, {1}.o);\n".format(wall.name, "zone" + str(wall.idxIn)))
-    if not (wall.idxIn in adiabaticZonelist and wall.direction == 2):
+    if not (wall.idxIn in adiabaticZonelist and wall.direction == 2) and \
+       not CheckIfAdjacencyUnderMask(wall.idxIn, mask, wall.portIn):
         fo.write("  connect(temp{0}.T, ambient.y);\n".format(wall.idx))
         fo.write("  connect(temp{0}.port, wallR{1}.port_b);\n".format(wall.idx, wall.idx))
         fo.write("  connect(wallR{0}.port_a, wall{1}.port_s);\n".format(wall.idx, wall.idx))
@@ -448,8 +526,4 @@ for wall in walllist:
 fo.write("annotation(experiment(StopTime = {0}, __Wolfram_NumberOfIntervals = -1));\n".format(stopTime))
         
 fo.write("end " + model_name + ";\n")
-fo.close()
-
-fo = open("package.order", "a")
-fo.write(model_name + "\n")
 fo.close()
