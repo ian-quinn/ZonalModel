@@ -146,11 +146,11 @@ timeticks = 0
 f = open(epw_path, mode="r")
 for line in f.readlines():
     datalist = line.split(',')
-    if (len(datalist) == 35):
+    if len(datalist) == 35:
         timeticks = timeticks + 1
-        if (timeticks * 3600 > (time_start - time_init).total_seconds() and \
-            (timeticks - 1) * 3600 < (time_end - time_init).total_seconds()):
-            if (len(series_temp) == 0):
+        if timeticks * 3600 > (time_start - time_init).total_seconds() and \
+            (timeticks - 1) * 3600 < (time_end - time_init).total_seconds():
+            if len(series_temp) == 0:
                 series_time.append(0.0)
                 series_temp.append(round(float(datalist[6]) + 273.15, 2))
             else:
@@ -188,7 +188,7 @@ for k in range(tickz):
                 zonelist.append(None)
 # zonecheck = ""
 # for zone in zonelist:
-#     if (zone == None):
+#     if zone == None: 
 #         zonecheck += " 0"
 #     else:
 #         zonecheck += " 1"
@@ -225,7 +225,7 @@ for i in range(len(zonelist)):
         zonelist[RetrieveId([coords[0], coords[1], coords[2] + 1], tickx, ticky)].port[4] = zonelist[i].port[5]
 
 for zone in zonelist:
-    if (zone != None):
+    if zone != None:
         chain = ""
         for i in range(len(zone.connect)):
             chain += ", " + str(zone.connect[i])
@@ -233,7 +233,7 @@ for zone in zonelist:
 
 walllist = [] # list of module Wall
 for i in range(len(zonelist)):
-    if (zonelist[i] == None):
+    if zonelist[i] == None:
         continue
     connectors = zonelist[i].connect
     for j in range(len(connectors)):

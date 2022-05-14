@@ -5,7 +5,7 @@ import numpy as np
 import pandas as pd
 
 import shapely
-from shapely.geometry import Polygon, Point
+from shapely.geometry import Polygon, Point, LineString
 from shapely.geometry import box
 from matplotlib import pyplot as plt
 import matplotlib.animation as animation
@@ -33,9 +33,9 @@ def getSEA(struct_time, latitude, longitude, utc):
 
     SHA = (hour_minute - 12) * 15 + longitude + time_correction
 
-    if (SHA > 180):
+    if SHA > 180:
         SHA_corrected = SHA - 360
-    elif (SHA < -180):
+    elif SHA < -180:
         SHA_corrected = SHA + 360
     else:
         SHA_corrected = SHA
@@ -75,9 +75,9 @@ def getAZ(struct_time, latitude, longitude, utc):
 
     SHA = (hour_minute - 12) * 15 + longitude + time_correction
 
-    if (SHA > 180):
+    if SHA > 180:
         SHA_corrected = SHA - 360
-    elif (SHA < -180):
+    elif SHA < -180:
         SHA_corrected = SHA + 360
     else:
         SHA_corrected = SHA
@@ -132,53 +132,155 @@ def PileUpList(flatlist, dimx, dimy):
 			sub = []
 	return nests
 
-def GetMesh(polyloop, wwr, cell_dim, location, stopwatch, solarload):
+# wall dimension:				________
+#			1111111111111111111  height
+#			1111111110000001111
+#			1111111110000001111
+#	____	1111111110000001111
+#	sill	ptA1111111111111ptB
+#			|- gap -|
+def ProjectWall(ptA, ptB, zelta, theta, gap, sill, height)->" \
+	Returns the shadow (shapely.geometry.Polygon) of the wall under the sun at \
+	certain azimuth (zelta) and altitude (theta, elevation angle from horizon)":
+	length = math.sqrt(
+		math.pow(ptB[0] - ptA[0], 2) + 
+		math.pow(ptB[1] - ptA[1], 2))
+	dirx = (ptB[0] - ptA[0]) / length
+	diry = (ptB[1] - ptA[1]) / length
+	# dir0 = math.acos(diry)
+	dir0 = math.atan2(1, 0) - math.atan2(diry, dirx)
+	if dir0 < 0:
+		dir0 += math.pi * 2
+	tao = abs(zelta - dir0)
+	if tao > math.pi:
+		tao -= math.pi
+	# print(zeltas[i]/math.pi * 180)
+	# print(dir0/math.pi * 180)
+	# print(tao/math.pi * 180)
 
-	floorplan = Polygon(polyloop)
+	# calculate unit projector with unit length
+	projx = math.sin(zelta - math.pi) / math.tan(theta)
+	projy = math.cos(zelta - math.pi) / math.tan(theta)
+	# consider the sill, gap and wwr to construct the projection
+	pt1 = Point(ptA[0] + dirx * gap + projx * sill, 
+		ptA[1] + diry * gap + projy * sill)
+	pt2 = Point(ptB[0] - dirx * gap + projx * sill, 
+		ptB[1] - diry * gap + projy * sill)
+	pt3 = Point(ptB[0] - dirx * gap + projx * (sill + height), 
+		ptB[1] - diry * gap + projy * (sill + height))
+	pt4 = Point(ptA[0] + dirx * gap + projx * (sill + height), 
+		ptA[1] + diry * gap + projy * (sill + height))
+	shadow = Polygon([pt1, pt2, pt3, pt4, pt1])
 
-	while len(wwr) < len(polyloop):
-		wwr.append(wwr[len(wwr) - 1])
+	return shadow, tao
+
+
+def GetMesh(
+	polyloops:"nested lists of vertice coords representing exterior/interior boundary", 
+	mask_wwr:"list of window to wall ratio of each wall. duplicate the last if not enough", 
+	mask_adia:"list of boundary condition of each wall. duplicate the last if not enough", 
+	scale_factor:"the default mesh cell will be 1m * 1m times this value", 
+	location:"tuple for your location: (latitude, longitude, utc)", 
+	stopwatch:"tuple for simulation time: (time_start, time_end, time_delta)", 
+	solarload:"solar radiation, apply a discount on 1380 W/m2 according to lattitude and clearness")->" \
+	Returns snapshots, a nested lists representing solar load of each time step. \
+	Returns mesh_mask, a 2d array representing floorplan mesh and the boundary condition. \
+	Returns cell_dim, a tuple of cell dimension: (x, y)":
+
+	# unzip polyloops to Shapely Polygon
+	# the polyloops must be a nested loops (list)
+	floorplan = Polygon(polyloops[0])
+	# if more than 1 loop, update the floorplan with holes in it
+	if len(polyloops) > 1:
+		innerpolys = []
+		for i in range(1, len(polyloops)):
+			innerpolys.append(Polygon(polyloops[i]))
+		floorplan = Polygon(floorplan.exterior.coords, \
+			[poly.exterior.coords for poly in innerpolys])
+
+	while len(mask_wwr) < len(polyloops[0]):
+		mask_wwr.append(mask_wwr[len(mask_wwr) - 1])
 
 	dimz = 3
 	gap = 0.2
-	sill = 0.5
+	sill = 1
 
 	# x-y bounding box is a (minx, miny, maxx, maxy) tuple
 	dimx = floorplan.bounds[2] - floorplan.bounds[0]
 	dimy = floorplan.bounds[3] - floorplan.bounds[1]
-	tickx = FitDimension(dimx, cell_dim)
-	ticky = FitDimension(dimy, cell_dim)
-	floorplan_offset = shapely.affinity.translate(
+	tickx = FitDimension(dimx, scale_factor)
+	ticky = FitDimension(dimy, scale_factor)
+	# update floorplan by moving it to the origin
+	floorplan = shapely.affinity.translate(
 		floorplan, -floorplan.bounds[0], -floorplan.bounds[1])
-	shell = list(floorplan_offset.exterior.coords)
+	# move out a little bit for the boundary mesh
+	floorplan = shapely.affinity.translate(floorplan, 
+		dimx / tickx, dimy / ticky)
+	# cache shell/holes list for coords tuples
+	# convert shapely.coords.CoordinateSequence obj to list
+	outerloop = list(floorplan.exterior.coords)
+	print(outerloop)
+	outerpatch = Polygon(floorplan.exterior)
+	outeredge = []
+	for i in range(len(outerloop) - 1):
+		if mask_adia[i] == 1:
+			outeredge.append(LineString([outerloop[i], outerloop[i + 1]]))
+		else:
+			outeredge.append(None)
+	innerloops = []
+	innerpatchs = []
+	for hole in floorplan.interiors:
+		innerloops.append(list(hole.coords))
+		innerpatchs.append(Polygon(hole))
+	
 
 	# generate the mask
 	mesh = []
 	cell_area = dimx / tickx * dimy / ticky
+
+	# note that a perimeter mesh has grown based on the actual floorplan
+	# to represent the boundary condition that can be customized by user
+	# so the tickx and ticky plus 2. for example:
+	#							0 0 0 0 0
+	#   1 0 0					0 1 0 0 0
+	#   1 1 0   grows into ->	0 1 1 0 0
+	#   1 1 1 					0 1 1 1 0
+	#							0 0 0 0 0
 	# OUTPUT VARIABLE
-	mask_mesh = np.zeros((ticky, tickx), dtype=int)
+	mask_mesh = np.zeros((ticky + 2, tickx + 2), dtype=int)
+
 	# grow a matrix from bottom to top (positive y axis)
 	# note that the mesh follows the same order
-	for i in range(tickx * ticky):
-	    col = i % tickx
-	    row = ticky - i // tickx - 1
+	for i in range((tickx + 2) * (ticky + 2)):
+	    col = i % (tickx + 2)
+	    row = (ticky + 2) - i // (tickx + 2) - 1
 	    cell = box(col * dimx / tickx, row * dimy / ticky, \
 	        (col + 1) * dimx / tickx, (row + 1) * dimy / ticky)
 	    mesh.append(cell)
-	    sect = floorplan_offset.intersection(cell)
-	    if sect.area / cell_area > 0.5:
-	    	mask_mesh[ticky - row - 1][col] = 1
+	    # note that this returns the intersection of cell and the mcr
+	    sect_positive = outerpatch.intersection(cell)
+	    if sect_positive.area / cell_area > 0.5:
+	    	mask_mesh[(ticky + 2) - row - 1][col] += 1
+	    	for innerpatch in innerpatchs:
+	    		sect_negative = innerpatch.intersection(cell)
+	    		if sect_negative.area / cell_area > 0.5:
+	    			mask_mesh[(ticky + 2) - row - 1][col] += 1
+	    else:
+	    	for edge in outeredge:
+	    		if edge is not None:
+	    			sect_line = cell.intersection(edge)
+		    		if sect_line.length > 0.000001:
+		    			mask_mesh[(ticky + 2) - row - 1][col] = 3
+
 	# OUTPUT VARIABLE
-	mesh_dimension = (dimx, dimy)
+	cell_dimension = (dimx / tickx, dimy / ticky)
 
-	# print(mask_mesh)
+	print(mask_mesh)
 
-	# trim the mask
 	# sum(sum(mask_mesh))
 	mask_mesh_1d = mask_mesh.flatten()
 
 	# projection vector
-
 	zeltas = []         # in degree North-0 East-90 South-180 West-270
 	thetas = []         # in degree Horizontal-0 Perpendicular-90
 	time_ellapse = 0    # accumulated time in second
@@ -193,7 +295,7 @@ def GetMesh(polyloop, wwr, cell_dim, location, stopwatch, solarload):
 	# print(zeltas)
 
 	# a 1d array that recreates the matrix from top to bottom (negative y axis)
-	mask_mesh_compressed = mask_mesh.reshape(1, tickx * ticky)
+	mask_mesh_compressed = mask_mesh.reshape(1, (tickx + 2) * (ticky + 2))
 	# initialize zeros for solar mask at each snapshot
 	frame_solar = []
 	checker = ""
@@ -204,44 +306,21 @@ def GetMesh(polyloop, wwr, cell_dim, location, stopwatch, solarload):
 
 		# skip if the sun still below the horizon
 		if thetas[i] < 0:
-			frame_solar.append(PileUpList(mask_solar, tickx, ticky))
+			frame_solar.append(PileUpList(mask_solar, tickx + 2, ticky + 2))
 			continue
 
 		# iterate each edge of the polygon
-		for v in range(len(shell) - 1): # len(shell) - 1
-			if wwr[v] == 0:
+		for v in range(len(outerloop) - 1): # len(outerloop) - 1
+			if mask_wwr[v] == 0:
 				continue
 
 			length = math.sqrt(
-				math.pow(shell[v + 1][0] - shell[v][0], 2) + 
-				math.pow(shell[v + 1][1] - shell[v][1], 2))
-			height = length * dimz * wwr[v] / (length - 2 * gap) - sill
-			dirx = (shell[v + 1][0] - shell[v][0]) / length
-			diry = (shell[v + 1][1] - shell[v][1]) / length
-			# dir0 = math.acos(diry)
-			dir0 = math.atan2(1, 0) - math.atan2(diry, dirx)
-			if dir0 < 0:
-				dir0 += math.pi * 2
-			tao = abs(zeltas[i] - dir0)
-			if tao > math.pi:
-				tao -= math.pi
-			# print(zeltas[i]/math.pi * 180)
-			# print(dir0/math.pi * 180)
-			# print(tao/math.pi * 180)
-
-			# calculate unit projector with unit length
-			projx = math.sin(zeltas[i] - math.pi) / math.tan(thetas[i])
-			projy = math.cos(zeltas[i] - math.pi) / math.tan(thetas[i])
-			# consider the sill, gap and wwr to construct the projection
-			ptA = Point(shell[v][0] + dirx * gap + projx * sill, 
-				shell[v][1] + diry * gap + projy * sill)
-			ptB = Point(shell[v + 1][0] - dirx * gap + projx * sill, 
-				shell[v + 1][1] - diry * gap + projy * sill)
-			ptC = Point(shell[v + 1][0] - dirx * gap + projx * (sill + height), 
-				shell[v + 1][1] - diry * gap + projy * (sill + height))
-			ptD = Point(shell[v][0] + dirx * gap + projx * (sill + height), 
-				shell[v][1] + diry * gap + projy * (sill + height))
-			shadow = Polygon([ptA, ptB, ptC, ptD, ptA])
+				math.pow(outerloop[v + 1][0] - outerloop[v][0], 2) + 
+				math.pow(outerloop[v + 1][1] - outerloop[v][1], 2))
+			height = length * dimz * mask_wwr[v] / (length - 2 * gap) - sill
+			(shadow, tao) = ProjectWall(outerloop[v], outerloop[v + 1], 
+				zeltas[i], thetas[i], gap, sill, height)
+			shadow_area = shadow.area
 
 			# checker += "{{{0:2f}, {1:2f}, 0}}\n".format(ptA.x, ptA.y) \
 			# 	+ "{{{0:2f}, {1:2f}, 0}}\n".format(ptB.x, ptB.y) \
@@ -249,8 +328,10 @@ def GetMesh(polyloop, wwr, cell_dim, location, stopwatch, solarload):
 			# 	+ "{{{0:2f}, {1:2f}, 0}}\n".format(ptD.x, ptD.y)
 
 			# filter out invalid/self-intersected polygon
-			if shadow.area <= 0.000001:
+			if shadow_area <= 0.000001:
 				continue
+
+			# calculate the equivalent area of solar beam
 			area = (length - 2 * gap) * math.sin(tao) * height * math.cos(thetas[i])
 			# print(area)
 			# print("-----")
@@ -258,9 +339,26 @@ def GetMesh(polyloop, wwr, cell_dim, location, stopwatch, solarload):
 			if area < 0.000001:
 				continue
 
+			# remove blocking from self shadowing by outer loop
+			# pending work
+
+			# remove blocking from self shadowing by inner loop
+			for w in range(len(outerloop) - 1):
+				if w != v:
+					(_shadow, _tao) = ProjectWall(outerloop[w], outerloop[w + 1], 
+						zeltas[i], thetas[i], 0, 0, dimz)
+					shadow = shadow.difference(_shadow)
+
+			# remove blocking from inner loops shadowing
+			for innerloop in innerloops:
+				for w in range(len(innerloop) - 1):
+					(_shadow, _tao) = ProjectWall(innerloop[w], innerloop[w + 1], 
+						zeltas[i], thetas[i], 0, 0, dimz)
+					shadow = shadow.difference(_shadow)
+
 			# iterate each cell, following the mask_mesh_1d
 			for j in range(len(mesh)):
-				if mask_mesh_1d[j] == 0:
+				if mask_mesh_1d[j] != 1:
 					mask_solar[j] += 0
 					continue
 
@@ -272,37 +370,46 @@ def GetMesh(polyloop, wwr, cell_dim, location, stopwatch, solarload):
 				# 	checker += "{{{0:2f}, {1:2f}, 0}}# ".format(pt[0], pt[1])
 				# checker += "\n"
 
-				mask_solar[j] += sect.area / area * solarload
+				mask_solar[j] += (sect.area / shadow_area) * area * solarload
 
-		frame_solar.append(PileUpList(mask_solar, tickx, ticky))
+		frame_solar.append(PileUpList(mask_solar, tickx + 2, ticky + 2))
 
 
 	# print(checker)
 
-	return frame_solar, mask_mesh, mesh_dimension
+	return frame_solar, mask_mesh, cell_dimension
 
 
 if __name__ =='__main__':
 
-	# vertices = [[2, 1], [8, 1], [8, 4], [4, 4], [4, 7], [2, 7], [2, 1]]
-	vertices = [[0, 0], [10, 0], [10, 10], [0, 10], [0, 0]]
+	# vertexloops = [[[0, 0], [10, 0], [10, 10], [0, 10], [0, 0]], \
+	# 			   [[3, 4], [7, 4], [7, 8], [3, 8], [3, 4]]]
+
+	vertexloops = [[[3, 0], [10, 0], [10, 7], [7, 10], [0, 10], [0, 3], [3, 0]], 
+		 [[4, 4], [6, 4], [6, 6], [4, 6], [4, 4]]]
+
+	# vertexloops = [[[0, 0], [9, 0], [9, 9], [5, 9], [5, 1], [4, 1], [4, 9], [0, 9], [0, 0]]]
 	
-	mask_wwr = [0.8, 0, 0, 0]
+	# vertexloops = [[[0, 0], [10, 0], [10, 10], [0, 10], [0, 0]]]
 
-	cell_dim = 2
+	mask_wwr = [0.6, 0]
+	mask_adia = [0, 0, 0, 1, 1, 0, 0]
 
-	latitude = 33
+	scale_factor = 1
+
+	latitude = 45
 	longitude = 122
 	utc = 8      # time zone
 
+	time_step = 600					# in seconds
 	time_start = datetime.datetime.strptime("2022-01-01 00:00:00", "%Y-%m-%d %H:%M:%S")
 	time_end = datetime.datetime.strptime("2022-01-01 23:59:59", "%Y-%m-%d %H:%M:%S")
-	time_delta = datetime.timedelta(minutes=10)
+	time_delta = datetime.timedelta(seconds=time_step)
 
 	solarload = 1000
 
 	(snapshots, mask_mesh, mesh_dim) = GetMesh(
-		vertices, mask_wwr, cell_dim, 
+		vertexloops, mask_wwr, mask_adia, scale_factor, 
 		(latitude, longitude, utc), 
 		(time_start, time_end, time_delta), 
 		solarload)
@@ -313,13 +420,29 @@ if __name__ =='__main__':
 		if np.max(snapshot) > maxRadiation:
 			maxRadiation = np.max(snapshot)
 
-	fig = plt.figure()
+	boundary = Polygon(vertexloops[1])
+
+	fig = plt.figure(figsize=(5,5), dpi=72)
 	xlattice = np.arange(0, len(snapshots[0][0]) + 1)
 	ylattice = np.arange(0, len(snapshots[0]) + 1)
+	cmap = plt.cm.get_cmap('inferno').copy()
+	cmap.set_bad(color = 'w', alpha = 1.)
+	plt.axis('off') # remove all axes
+	plt.xticks([]) # remove ticks on x-axis
+	plt.yticks([]) # remove ticks on y-axis
+	plt.axis('equal')
+	plt.subplots_adjust(left=0, bottom=0, right=1, top=1)
 	imgs = []
 	for snapshot in snapshots:
-		imgs.append((plt.pcolor(xlattice, ylattice, snapshot, 
-			norm=plt.Normalize(0, maxRadiation)),))
+		for i in range(len(snapshot)):
+			for j in range(len(snapshot[0])):
+				if mask_mesh[len(snapshot) - i - 1][j] != 1:
+					snapshot[i][j] = np.nan
+		snapshot = np.ma.masked_invalid(snapshot)
+		# ax = plt.pcolor(xlattice, ylattice, snapshot, norm=plt.Normalize(0, maxRadiation))
+		ax = plt.pcolormesh(xlattice, ylattice, snapshot, cmap=cmap, edgecolors='None', 
+			norm=plt.Normalize(0, maxRadiation))
+		imgs.append((ax,))
 	img_ani = animation.ArtistAnimation(fig, imgs, interval = 50, repeat_delay=0, blit=True)
 	plt.show()
 
