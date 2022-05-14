@@ -82,18 +82,27 @@ class  Wall(object):
 
 model_name = "Rand"
 
-# vertexloops = [[[0, 0], [10, 0], [10, 10], [0, 10], [0, 0]], \
-#                [[3, 4], [7, 4], [7, 8], [3, 8], [3, 4]]]
-
-# vertexloops = [[[0, 0], [10, 0], [10, 10], [0, 10], [0, 0]]]
-
+# DIAMOND
 vertexloops = [[[3, 0], [10, 0], [10, 7], [7, 10], [0, 10], [0, 3], [3, 0]], 
-               [[4, 4], [6, 4], [6, 6], [4, 6], [4, 4]]]
+   [[4, 4], [6, 4], [6, 6], [4, 6], [4, 4]]]
 
-mask_wwr = [0.8, 0, 0, 0]
-mask_adia = [0, 0, 0, 1, 1, 0, 0]
+# RAND
+# vertexloops = [[[4, 0], [10, 0], [10, 5], [6, 5], [6, 10], [0, 10], [0, 5], [4, 5], [4, 0]]]
 
-scale_factor = 2
+# SNAKE
+# vertexloops = [[[0, 0], [11, 0], [11, 3], [2, 3], [2, 4], [11, 4], [11, 11], [0, 11], [0, 8], \
+#    [9, 8], [9, 7], [0, 7], [0, 0]]]
+
+# FRAME
+# vertexloops = [[[0, 0], [10, 0], [10, 10], [0, 10], [0, 0]], \
+#     [[3, 3], [7, 3], [7, 7], [3, 7], [3, 3]]]
+
+# mask_wwr = [0.8]
+# mask_adia = [0]
+mask_wwr = [0.8, 0]
+mask_adia = [0, 0, 0, 1, 1, 0]
+
+scale_factor = 1
 
 latitude = 33
 longitude = 122
@@ -105,11 +114,11 @@ time_start = datetime.datetime.strptime("2022-01-01 00:00:00", "%Y-%m-%d %H:%M:%
 time_end = datetime.datetime.strptime("2022-01-01 23:59:59", "%Y-%m-%d %H:%M:%S")
 time_delta = datetime.timedelta(seconds=time_step)
 
-solarload = 1000
+solarload = 500
 
 # thermal property settings
-capacity = 100000      # general heat capacity of wall material (J/K*m2) (cp * rho * thickness)
-resistance = 1   # general thermal resistance of wall material (m2*K/W) (thickness / conductance + 1 / convection rate)
+capacity = 50000      # general heat capacity of wall material (J/K*m2) (cp * rho * thickness)
+resistance = 0.5   # general thermal resistance of wall material (m2*K/W) (thickness / conductance + 1 / convection rate)
 
 epw_path = "CHN_SH_Shanghai.583620_CSWD.epw"
 

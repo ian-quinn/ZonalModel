@@ -132,16 +132,17 @@ def PileUpList(flatlist, dimx, dimy):
 			sub = []
 	return nests
 
-# wall dimension:				________
-#			1111111111111111111  height
+# wall dimension:				______
+#  ________ 1111111111111111111  dimz
+#	win_h	1111111110000001111
 #			1111111110000001111
-#			1111111110000001111
-#	____	1111111110000001111
+#  ________	1111111110000001111
 #	sill	ptA1111111111111ptB
 #			|- gap -|
-def ProjectWall(ptA, ptB, zelta, theta, gap, sill, height)->" \
+def ProjectWall(ptA, ptB, zelta, theta, gap, sill, win_h)->" \
 	Returns the shadow (shapely.geometry.Polygon) of the wall under the sun at \
-	certain azimuth (zelta) and altitude (theta, elevation angle from horizon)":
+	certain azimuth (zelta) and altitude (theta, elevation angle from horizon). \
+	Returns tao, the incident beam angle to the wall surface":
 	length = math.sqrt(
 		math.pow(ptB[0] - ptA[0], 2) + 
 		math.pow(ptB[1] - ptA[1], 2))
@@ -166,10 +167,10 @@ def ProjectWall(ptA, ptB, zelta, theta, gap, sill, height)->" \
 		ptA[1] + diry * gap + projy * sill)
 	pt2 = Point(ptB[0] - dirx * gap + projx * sill, 
 		ptB[1] - diry * gap + projy * sill)
-	pt3 = Point(ptB[0] - dirx * gap + projx * (sill + height), 
-		ptB[1] - diry * gap + projy * (sill + height))
-	pt4 = Point(ptA[0] + dirx * gap + projx * (sill + height), 
-		ptA[1] + diry * gap + projy * (sill + height))
+	pt3 = Point(ptB[0] - dirx * gap + projx * (sill + win_h), 
+		ptB[1] - diry * gap + projy * (sill + win_h))
+	pt4 = Point(ptA[0] + dirx * gap + projx * (sill + win_h), 
+		ptA[1] + diry * gap + projy * (sill + win_h))
 	shadow = Polygon([pt1, pt2, pt3, pt4, pt1])
 
 	return shadow, tao
@@ -200,6 +201,8 @@ def GetMesh(
 
 	while len(mask_wwr) < len(polyloops[0]):
 		mask_wwr.append(mask_wwr[len(mask_wwr) - 1])
+	while len(mask_adia) < len(polyloops[0]):
+		mask_adia.append(0)
 
 	dimz = 3
 	gap = 0.2
@@ -221,12 +224,12 @@ def GetMesh(
 	outerloop = list(floorplan.exterior.coords)
 	print(outerloop)
 	outerpatch = Polygon(floorplan.exterior)
-	outeredge = []
+	outeredge_adia = []
 	for i in range(len(outerloop) - 1):
 		if mask_adia[i] == 1:
-			outeredge.append(LineString([outerloop[i], outerloop[i + 1]]))
+			outeredge_adia.append(LineString([outerloop[i], outerloop[i + 1]]))
 		else:
-			outeredge.append(None)
+			outeredge_adia.append(None)
 	innerloops = []
 	innerpatchs = []
 	for hole in floorplan.interiors:
@@ -266,7 +269,7 @@ def GetMesh(
 	    		if sect_negative.area / cell_area > 0.5:
 	    			mask_mesh[(ticky + 2) - row - 1][col] += 1
 	    else:
-	    	for edge in outeredge:
+	    	for edge in outeredge_adia:
 	    		if edge is not None:
 	    			sect_line = cell.intersection(edge)
 		    		if sect_line.length > 0.000001:
@@ -317,9 +320,9 @@ def GetMesh(
 			length = math.sqrt(
 				math.pow(outerloop[v + 1][0] - outerloop[v][0], 2) + 
 				math.pow(outerloop[v + 1][1] - outerloop[v][1], 2))
-			height = length * dimz * mask_wwr[v] / (length - 2 * gap) - sill
+			win_height = length * dimz * mask_wwr[v] / (length - 2 * gap) - sill
 			(shadow, tao) = ProjectWall(outerloop[v], outerloop[v + 1], 
-				zeltas[i], thetas[i], gap, sill, height)
+				zeltas[i], thetas[i], gap, sill, win_height)
 			shadow_area = shadow.area
 
 			# checker += "{{{0:2f}, {1:2f}, 0}}\n".format(ptA.x, ptA.y) \
@@ -332,7 +335,7 @@ def GetMesh(
 				continue
 
 			# calculate the equivalent area of solar beam
-			area = (length - 2 * gap) * math.sin(tao) * height * math.cos(thetas[i])
+			area = (length - 2 * gap) * math.sin(tao) * win_height * math.cos(thetas[i])
 			# print(area)
 			# print("-----")
 
@@ -346,14 +349,14 @@ def GetMesh(
 			for w in range(len(outerloop) - 1):
 				if w != v:
 					(_shadow, _tao) = ProjectWall(outerloop[w], outerloop[w + 1], 
-						zeltas[i], thetas[i], 0, 0, dimz)
+						zeltas[i], thetas[i], 0, 0, dimz - sill)
 					shadow = shadow.difference(_shadow)
 
 			# remove blocking from inner loops shadowing
 			for innerloop in innerloops:
 				for w in range(len(innerloop) - 1):
 					(_shadow, _tao) = ProjectWall(innerloop[w], innerloop[w + 1], 
-						zeltas[i], thetas[i], 0, 0, dimz)
+						zeltas[i], thetas[i], 0, 0, dimz - sill)
 					shadow = shadow.difference(_shadow)
 
 			# iterate each cell, following the mask_mesh_1d
@@ -382,22 +385,30 @@ def GetMesh(
 
 if __name__ =='__main__':
 
-	# vertexloops = [[[0, 0], [10, 0], [10, 10], [0, 10], [0, 0]], \
-	# 			   [[3, 4], [7, 4], [7, 8], [3, 8], [3, 4]]]
-
+	# DIAMOND
 	vertexloops = [[[3, 0], [10, 0], [10, 7], [7, 10], [0, 10], [0, 3], [3, 0]], 
 		 [[4, 4], [6, 4], [6, 6], [4, 6], [4, 4]]]
 
-	# vertexloops = [[[0, 0], [9, 0], [9, 9], [5, 9], [5, 1], [4, 1], [4, 9], [0, 9], [0, 0]]]
-	
+	# RAND
+	# vertexloops = [[[4, 0], [10, 0], [10, 5], [6, 5], [6, 10], [0, 10], [0, 5], [4, 5], [4, 0]]]
+
+	# SNAKE
+	# vertexloops = [[[0, 0], [11, 0], [11, 3], [2, 3], [2, 4], [11, 4], [11, 11], [0, 11], [0, 8], \
+	#    [9, 8], [9, 7], [0, 7], [0, 0]]]
+
+	# FRAME
+	# vertexloops = [[[0, 0], [10, 0], [10, 10], [0, 10], [0, 0]], \
+	# 	[[3, 3], [7, 3], [7, 7], [3, 7], [3, 3]]]
+
 	# vertexloops = [[[0, 0], [10, 0], [10, 10], [0, 10], [0, 0]]]
 
-	mask_wwr = [0.6, 0]
-	mask_adia = [0, 0, 0, 1, 1, 0, 0]
+	# mask_wwr = [0.8]
+	mask_wwr = [0.8, 0]
+	mask_adia = [0, 0, 0, 1, 1, 0]
 
 	scale_factor = 1
 
-	latitude = 45
+	latitude = 33
 	longitude = 122
 	utc = 8      # time zone
 
@@ -406,7 +417,7 @@ if __name__ =='__main__':
 	time_end = datetime.datetime.strptime("2022-01-01 23:59:59", "%Y-%m-%d %H:%M:%S")
 	time_delta = datetime.timedelta(seconds=time_step)
 
-	solarload = 1000
+	solarload = 500
 
 	(snapshots, mask_mesh, mesh_dim) = GetMesh(
 		vertexloops, mask_wwr, mask_adia, scale_factor, 
@@ -420,17 +431,15 @@ if __name__ =='__main__':
 		if np.max(snapshot) > maxRadiation:
 			maxRadiation = np.max(snapshot)
 
-	boundary = Polygon(vertexloops[1])
-
 	fig = plt.figure(figsize=(5,5), dpi=72)
 	xlattice = np.arange(0, len(snapshots[0][0]) + 1)
 	ylattice = np.arange(0, len(snapshots[0]) + 1)
 	cmap = plt.cm.get_cmap('inferno').copy()
 	cmap.set_bad(color = 'w', alpha = 1.)
+	plt.axis('equal')
 	plt.axis('off') # remove all axes
 	plt.xticks([]) # remove ticks on x-axis
 	plt.yticks([]) # remove ticks on y-axis
-	plt.axis('equal')
 	plt.subplots_adjust(left=0, bottom=0, right=1, top=1)
 	imgs = []
 	for snapshot in snapshots:
@@ -443,7 +452,7 @@ if __name__ =='__main__':
 		ax = plt.pcolormesh(xlattice, ylattice, snapshot, cmap=cmap, edgecolors='None', 
 			norm=plt.Normalize(0, maxRadiation))
 		imgs.append((ax,))
-	img_ani = animation.ArtistAnimation(fig, imgs, interval = 50, repeat_delay=0, blit=True)
+	img_ani = animation.ArtistAnimation(fig, imgs, interval=50, repeat_delay=0, blit=True)
 	plt.show()
 
 	# pip install pillow
@@ -453,6 +462,6 @@ if __name__ =='__main__':
 			self._frames[0].save(
 				self.outfile, save_all=True, append_images=self._frames[1:],
 					duration=int(1000 / self.fps), loop=0)
-	img_ani.save(r"animation.gif", writer=LoopingPillowWriter(fps=20)) 
+	img_ani.save(r"animation.gif", writer=LoopingPillowWriter(fps=20))
 	# img_ani.save(r"animation.gif", writer=animation.PillowWriter(fps=30))
 	# img_ani.save(r"animation.gif", writer='imagemagick')

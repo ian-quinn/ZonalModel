@@ -180,12 +180,12 @@ visualizeShadow = True      # generate a movie flip for solar distribution
 useActuralAmbient = True    # use ambient temperature from EPW file
 useAdiabaticWall = False     # set adiabatic boundary condition to all walls
 
-x = 7      # grid on abscissa
-y = 7      # grid on ordinate
+x = 3      # grid on abscissa
+y = 3      # grid on ordinate
 z = 3       # grid on vertical
 
-dim_x = 21  # abscissa dimension of the box
-dim_y = 21  # ordinate dimension of the box
+dim_x = 6  # abscissa dimension of the box
+dim_y = 6  # ordinate dimension of the box
 dim_z = 3   # vertical dimension of the box
 
 # mask by default
@@ -193,7 +193,8 @@ dim_z = 3   # vertical dimension of the box
 # mask = mask.reshape(x, y)
 # customize your mask
 # mask = np.array([1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0,0,1,1,1,1,0,0,0,1,1,1,1,0,0,0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1])
-mask = np.array([1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0,0,0,0,0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1])
+# mask = np.array([1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0,0,0,0,0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1])
+mask = np.array([1,1,1,1,1,1,1,1,1])
 mask = mask.reshape(x, y)
 print(mask)
 
@@ -203,18 +204,18 @@ h = 1.5     # window height
 Q = 1000    # general beam radiation intensity
 Q_in = 0
 
-capacity = 100000      # general heat capacity of wall material (J/K*m2) (cp * rho * thickness)
-resistance = 1   # general thermal resistance of wall material (m2*K/W) (thickness / conductance + 1 / convection rate)
+capacity = 50000      # general heat capacity of wall material (J/K*m2) (cp * rho * thickness)
+resistance = 0.5   # general thermal resistance of wall material (m2*K/W) (thickness / conductance + 1 / convection rate)
 
 latitude = 33
 longitude = 122
 utc_offset = 8      # time zone
-timestep = 20       # interval to update the solar radiation (in minute)
+timestep = 10       # interval to update the solar radiation (in minute)
 
 epw_path = "CHN_SH_Shanghai.583620_CSWD.epw"
 time_init = datetime.datetime.strptime("2022-01-01 00:00:00", "%Y-%m-%d %H:%M:%S")
-time_start = datetime.datetime.strptime("2022-07-20 00:00:00", "%Y-%m-%d %H:%M:%S")
-time_end = datetime.datetime.strptime("2022-07-20 23:59:59", "%Y-%m-%d %H:%M:%S")
+time_start = datetime.datetime.strptime("2022-01-01 00:00:00", "%Y-%m-%d %H:%M:%S")
+time_end = datetime.datetime.strptime("2022-01-01 23:59:59", "%Y-%m-%d %H:%M:%S")
 stopTime = (time_end - time_start).total_seconds()
 
 series_temp = []
@@ -450,7 +451,7 @@ for zone in zonelist:
 
 ############################# module serialization #################################
 
-model_name = "Square7_hole_s_lowrc"
+model_name = "Std"
 fo = open(model_name + ".mo", "w")
 fo.write("within VEPZO.Samples;\n")
 fo.write("model " + model_name + "\n")
