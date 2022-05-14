@@ -12,29 +12,30 @@ def RetrieveId(coord, x, y):
 def RetrieveCoord(id, x, y):
     return [id % (x * y) % x, id % (x * y) // x, id // (x * y)]
 
-def CheckIfAdjacencyUnderMask(index, x, y, mask, portId):
+# Retrieve the adjacent cell in the mesh mask
+# -1 for indexation failure
+# 0 for void region / 1 for floorplan occupied region
+# 2 for void region enclosed / 3 for outer adiabatic boundary
+def RetrieveAdjacencyMask(index, x, y, mask, portId):
     pt = RetrieveCoord(index, x, y)
     if portId == 0:
         if pt[0] - 1 >= 0:
             adj = [pt[0] - 1, pt[1]]
-            if (mask[y - adj[1] - 1, adj[0]] == 0):
-                return True
+            return mask[y - adj[1] - 1, adj[0]]
     if portId == 1:
         if pt[0] + 1 < x:
             adj = [pt[0] + 1, pt[1]]
-            if (mask[y - adj[1] - 1, adj[0]] == 0):
-                return True
+            return mask[y - adj[1] - 1, adj[0]]
     if portId == 2:
         if pt[1] - 1 >= 0:
             adj = [pt[0], pt[1] - 1]
-            if (mask[y - adj[1] - 1, adj[0]] == 0):
-                return True
+            return mask[y - adj[1] - 1, adj[0]]
     if portId == 3:
         if pt[1] + 1 < y:
             adj = [pt[0], pt[1] + 1]
-            if (mask[y - adj[1] - 1, adj[0]] == 0):
-                return True
-    return False
+            return mask[y - adj[1] - 1, adj[0]]
+    # print("WARNING retrieving ouside the mesh boundary")
+    return -1
 
 def ZipTimeTable(time, value):
     content = ""
@@ -81,12 +82,18 @@ class  Wall(object):
 
 model_name = "Rand"
 
-# vertices = [[2, 1], [8, 1], [8, 4], [4, 4], [4, 7], [2, 7], [2, 1]]
-vertices = [[0, 0], [10, 0], [10, 10], [0, 10], [0, 0]]
+# vertexloops = [[[0, 0], [10, 0], [10, 10], [0, 10], [0, 0]], \
+#                [[3, 4], [7, 4], [7, 8], [3, 8], [3, 4]]]
+
+# vertexloops = [[[0, 0], [10, 0], [10, 10], [0, 10], [0, 0]]]
+
+vertexloops = [[[3, 0], [10, 0], [10, 7], [7, 10], [0, 10], [0, 3], [3, 0]], 
+               [[4, 4], [6, 4], [6, 6], [4, 6], [4, 4]]]
 
 mask_wwr = [0.8, 0, 0, 0]
+mask_adia = [0, 0, 0, 1, 1, 0, 0]
 
-cell_dim = 2
+scale_factor = 2
 
 latitude = 33
 longitude = 122
@@ -110,17 +117,17 @@ epw_path = "CHN_SH_Shanghai.583620_CSWD.epw"
 
 # good to go for the meshing work
 # snapshots / 3d array in nested lists form representing solar load matrix of each step
-# mask_floor / 2d array representing solid cell in bounding box of target polygon
-(snapshots, mesh_mask, mesh_dim) = GetMesh(
-    vertices, mask_wwr, cell_dim, 
+# mesh_mask / 2d array representing solid cell in bounding box of target polygon
+(snapshots, mesh_mask, cell_dim) = GetMesh(
+    vertexloops, mask_wwr, mask_adia, scale_factor, 
     (latitude, longitude, utc), 
     (time_start, time_end, time_delta), 
     solarload)
 
 # passed down geometry information
-dimx = mesh_dim[0]
-dimy = mesh_dim[1]
-dimz = 3                        # default as always
+dimx = cell_dim[0]
+dimy = cell_dim[1]
+dimz = 1                        # default as always
 tickx = np.size(mesh_mask, 1)
 ticky = np.size(mesh_mask, 0)
 tickz = 3                       # default as always
@@ -130,7 +137,7 @@ time_simulation = (time_end - time_start).total_seconds()
 # grab timestamps
 timestamps = []          # time stamps in second
 for i in range(len(snapshots)):
-    timestamps.append(i * 600)
+    timestamps.append(i * time_step)
 
 # grab temperature seris from epw file
 series_temp = []
@@ -175,7 +182,7 @@ for k in range(tickz):
     for j in range(ticky):
         for i in range(tickx):
             #zonelist.append(Zone(len(zonelist), i, j, k))
-            if mesh_mask[ticky - j - 1][i]:
+            if mesh_mask[ticky - j - 1][i] == 1:
                 zonelist.append(Zone(len(zonelist), i, j, k))
             else:
                 zonelist.append(None)
@@ -189,10 +196,12 @@ for k in range(tickz):
 
 flowlist = [] # list of module Flow
 for i in range(len(zonelist)):
+    if zonelist[i] == None:
+        continue
     coords = zonelist[i].coord
     if coords[0] < tickx - 1:
         print("looping " + str(coords[0]) + " | " + str(coords[1]))
-        if (zonelist[i] != None and mesh_mask[ticky - coords[1] - 1][coords[0] + 1] == 1):
+        if mesh_mask[ticky - coords[1] - 1][coords[0] + 1] == 1:
             targetId = RetrieveId([coords[0] + 1, coords[1], coords[2]], tickx, ticky)
             flowlist.append(Flow(len(flowlist), 0, targetId, i, 0, 1))
             zonelist[i].connect[1] = 1
@@ -200,7 +209,7 @@ for i in range(len(zonelist)):
             zonelist[targetId].connect[0] = 1
             zonelist[targetId].port[0] = zonelist[i].port[1]
     if coords[1] < ticky - 1:
-        if (zonelist[i] != None and mesh_mask[ticky - coords[1] - 2][coords[0]] == 1):
+        if mesh_mask[ticky - coords[1] - 2][coords[0]] == 1:
             flowlist.append(Flow(len(flowlist), 1, 
                 RetrieveId([coords[0], coords[1] + 1, coords[2]], tickx, ticky), i, 2, 3))
             zonelist[i].connect[3] = 1
@@ -208,13 +217,12 @@ for i in range(len(zonelist)):
             zonelist[RetrieveId([coords[0], coords[1] + 1, coords[2]], tickx, ticky)].connect[2] = 1
             zonelist[RetrieveId([coords[0], coords[1] + 1, coords[2]], tickx, ticky)].port[2] = zonelist[i].port[3]
     if coords[2] < tickz - 1:
-        if (zonelist[i] != None):
-            flowlist.append(Flow(len(flowlist), 2, 
-                RetrieveId([coords[0], coords[1], coords[2] + 1], tickx, ticky), i, 4, 5))
-            zonelist[i].connect[5] = 1
-            zonelist[i].port[5] = flowlist[-1].name
-            zonelist[RetrieveId([coords[0], coords[1], coords[2] + 1], tickx, ticky)].connect[4] = 1
-            zonelist[RetrieveId([coords[0], coords[1], coords[2] + 1], tickx, ticky)].port[4] = zonelist[i].port[5]
+        flowlist.append(Flow(len(flowlist), 2, 
+            RetrieveId([coords[0], coords[1], coords[2] + 1], tickx, ticky), i, 4, 5))
+        zonelist[i].connect[5] = 1
+        zonelist[i].port[5] = flowlist[-1].name
+        zonelist[RetrieveId([coords[0], coords[1], coords[2] + 1], tickx, ticky)].connect[4] = 1
+        zonelist[RetrieveId([coords[0], coords[1], coords[2] + 1], tickx, ticky)].port[4] = zonelist[i].port[5]
 
 for zone in zonelist:
     if (zone != None):
@@ -245,6 +253,10 @@ for zone in zonelist:
 
 ############################# module serialization #################################
 
+# dump the mask matrix to csv for post-processing
+print("#############" + str(type(mesh_mask[0][0])))
+np.savetxt("mask.csv", mesh_mask, fmt='%d', delimiter=',')
+
 fo = open(model_name + ".mo", "w")
 fo.write("within VEPZO.Samples;\n")
 fo.write("model " + model_name + "\n")
@@ -253,33 +265,37 @@ for zone in zonelist:
     if zone != None:
         if zone.idx < tickx * ticky:
             fo.write("  Zone {0}(IsSource = true, dx = {1}, dy = {2}, dz = {3}, T_0 = {4});\n".
-                format(zone.name, dimx/tickx, dimy/ticky, dimz/tickz, temp_init))
+                format(zone.name, dimx, dimy, dimz, temp_init))
             fo.write("  Modelica.Blocks.Sources.TimeTable solar{0}(table = [{1}]);\n".
                 format(zone.idx, ZipTimeTable(timestamps, solarseries[zone.idx])))
             fo.write("  Modelica.Thermal.HeatTransfer.Sources.PrescribedHeatFlow heatFlow{0};\n".format(zone.idx))
         else:
             fo.write("  Zone {0}(dx = {1}, dy = {2}, dz = {3}, T_0 = {4});\n"
-                .format(zone.name, dimx/tickx, dimy/ticky, dimz/tickz, temp_init))
+                .format(zone.name, dimx, dimy, dimz, temp_init))
 
 for flow in flowlist:
     fo.write("  Flow {0}(Direction = {1});\n".format(flow.name, flow.direction))
 for wall in walllist:
-    print("Coming to wall" + str(walllist.index(wall)))
-    area = dimy / ticky * (dimz / tickz)
+    print("Wall-" + str(walllist.index(wall)) + " assigned boundary condition ", end='')
+    area = dimy * dimz
     if wall.direction == 1:
-        area = dimx / tickx * (dimz / tickz)
+        area = dimx * dimz
     else:
-        area = dimx / tickx * (dimy / ticky)
+        area = dimx * dimy
 
     if wall.idxIn in adiabaticZonelist and wall.direction == 2:
-        print("at bottom/up")
+        print("Adiabatic (top/bottom)")
         fo.write("  Wall {0}(Direction = {1});\n".format(wall.name, wall.direction))
         continue
-    if CheckIfAdjacencyUnderMask(wall.idxIn, tickx, ticky, mesh_mask, wall.portIn):
-        print("at hole boundary")
+    if RetrieveAdjacencyMask(wall.idxIn, tickx, ticky, mesh_mask, wall.portIn) == 2:
+        print("Adiabatic (hole)")
         fo.write("  Wall {0}(Direction = {1});\n".format(wall.name, wall.direction))
         continue
-    print("normal one")
+    if RetrieveAdjacencyMask(wall.idxIn, tickx, ticky, mesh_mask, wall.portIn) == 3:
+        print("Adiabatic (manual)")
+        fo.write("  Wall {0}(Direction = {1});\n".format(wall.name, wall.direction))
+        continue
+    print("Temperature (epw)")
     fo.write("  Wall {0}(Direction = {1}, IsSource = true);\n".format(wall.name, wall.direction))
     fo.write("  Modelica.Thermal.HeatTransfer.Sources.PrescribedTemperature temp{0};\n".format(wall.idx))
     fo.write("  Modelica.Thermal.HeatTransfer.Components.ThermalResistor wallR{0}(R = {1});\n".format(wall.idx, resistance / area))
@@ -310,8 +326,8 @@ for zone in zonelist:
             fo.write("  connect({0}.i[{1}], {2}.o);\n".format(zone.name, i+1, zone.port[i]))
 for wall in walllist:
     fo.write("  connect({0}.i, {1}.o);\n".format(wall.name, "zone" + str(wall.idxIn)))
-    if not (wall.idxIn in adiabaticZonelist and wall.direction == 2) and \
-       not CheckIfAdjacencyUnderMask(wall.idxIn, tickx, ticky, mesh_mask, wall.portIn):
+    adjMaskValue = RetrieveAdjacencyMask(wall.idxIn, tickx, ticky, mesh_mask, wall.portIn)
+    if not (wall.idxIn in adiabaticZonelist and wall.direction == 2) and adjMaskValue == 0:
         fo.write("  connect(temp{0}.T, ambient.y);\n".format(wall.idx))
         fo.write("  connect(temp{0}.port, wallR{1}.port_b);\n".format(wall.idx, wall.idx))
         fo.write("  connect(wallR{0}.port_a, wall{1}.port_s);\n".format(wall.idx, wall.idx))
