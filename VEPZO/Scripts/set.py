@@ -4,6 +4,7 @@ import datetime
 
 import numpy as np
 from mesh import GetMesh
+from fake import FakeInput
 
 # assitants
 def RetrieveId(coord, x, y):
@@ -34,7 +35,7 @@ def RetrieveAdjacencyMask(index, x, y, mask, portId):
         if pt[1] + 1 < y:
             adj = [pt[0], pt[1] + 1]
             return mask[y - adj[1] - 1, adj[0]]
-    # print("WARNING retrieving ouside the mesh boundary")
+    # print("WARNING retrieving outside the mesh boundary")
     return -1
 
 def ZipTimeTable(time, value):
@@ -70,9 +71,9 @@ class Flow(object):
 
 class  Wall(object):
     def __init__(self, idx, direction, idxA, portA):
-        self.idxIn = idxA
-        self.portIn = portA
-        self.idx = idx
+        self.idxIn = idxA       # index of the connected zone
+        self.portIn = portA     # one of the zone port [0, 0, 0, 0, 0, 0]
+        self.idx = idx          # index of this wall
         self.name = "wall" + str(idx)
         self.direction = direction
     def serialize(self):
@@ -80,47 +81,54 @@ class  Wall(object):
         
 #################### USER SETUP ####################
 
-model_name = "Rand"
+model_name = "test"
+# if you need to fake some day slices do set this as 6, 12, 18 or 24
+fakeSlice = 0
 
 # DIAMOND
-vertexloops = [[[3, 0], [10, 0], [10, 7], [7, 10], [0, 10], [0, 3], [3, 0]], 
-   [[4, 4], [6, 4], [6, 6], [4, 6], [4, 4]]]
+# vertexloops = [[[3, 0], [10, 0], [10, 7], [7, 10], [0, 10], [0, 3], [3, 0]], 
+#    [[4, 4], [6, 4], [6, 6], [4, 6], [4, 4]]]
 
 # RAND
-# vertexloops = [[[4, 0], [10, 0], [10, 5], [6, 5], [6, 10], [0, 10], [0, 5], [4, 5], [4, 0]]]
+# vertexloops = [[[12, 0], [30, 0], [30, 15], [18, 15], [18, 30], [0, 30], [0, 15], [12, 15], [12, 0]]]
 
 # SNAKE
-# vertexloops = [[[0, 0], [11, 0], [11, 3], [2, 3], [2, 4], [11, 4], [11, 11], [0, 11], [0, 8], \
-#    [9, 8], [9, 7], [0, 7], [0, 0]]]
+# vertexloops = [[[0, 0], [33, 0], [33, 9], [6, 9], [6, 12], [33, 12], [33, 33], [0, 33], [0, 24], \
+#    [27, 24], [27, 21], [0, 21], [0, 0]]]
 
 # FRAME
-# vertexloops = [[[0, 0], [10, 0], [10, 10], [0, 10], [0, 0]], \
-#     [[3, 3], [7, 3], [7, 7], [3, 7], [3, 3]]]
+# vertexloops = [[[0, 0], [21, 0], [21, 21], [0, 21], [0, 0]], \
+#     [[6, 6], [15, 6], [15, 15], [6, 15], [6, 6]]]
+# vertexloops = [[[0, 0], [7, 0], [7, 7], [0, 7], [0, 0]], \
+#     [[2, 2], [5, 2], [5, 5], [2, 5], [2, 2]]]
+vertexloops = [[[0, 0], [21, 0], [21, 21], [0, 21], [0, 0]]]
 
-# mask_wwr = [0.8]
+mask_wwr = [0.8]
 # mask_adia = [0]
-mask_wwr = [0.8, 0]
-mask_adia = [0, 0, 0, 1, 1, 0]
+# mask_wwr = [0.8, 0.8, 0.8, 0.8]
+mask_adia = [0, 0, 0, 0]
 
-scale_factor = 1
+scale_factor = 3
 
-latitude = 33
-longitude = 122
+latitude = 31.17
+longitude = 121.43
 utc = 8      # time zone
 
 time_step = 600                 # in seconds
 time_init = datetime.datetime.strptime("2022-01-01 00:00:00", "%Y-%m-%d %H:%M:%S")
-time_start = datetime.datetime.strptime("2022-01-01 00:00:00", "%Y-%m-%d %H:%M:%S")
-time_end = datetime.datetime.strptime("2022-01-01 23:59:59", "%Y-%m-%d %H:%M:%S")
+time_start = datetime.datetime.strptime("2022-01-25 00:00:00", "%Y-%m-%d %H:%M:%S")
+time_end = datetime.datetime.strptime("2022-01-25 23:59:59", "%Y-%m-%d %H:%M:%S")
 time_delta = datetime.timedelta(seconds=time_step)
 
-solarload = 500
+solarload = 250
 
 # thermal property settings
-capacity = 50000      # general heat capacity of wall material (J/K*m2) (cp * rho * thickness)
+capacity = 30000      # general heat capacity of wall material (J/K*m2) (cp * rho * thickness)
 resistance = 0.5   # general thermal resistance of wall material (m2*K/W) (thickness / conductance + 1 / convection rate)
+# lumped thermal property of perimeter enclosing?
 
-epw_path = "CHN_SH_Shanghai.583620_CSWD.epw"
+epw_path = "Shanghai.epw"
+delta_t = 0
 
 ######################################################
 
@@ -131,7 +139,7 @@ epw_path = "CHN_SH_Shanghai.583620_CSWD.epw"
     vertexloops, mask_wwr, mask_adia, scale_factor, 
     (latitude, longitude, utc), 
     (time_start, time_end, time_delta), 
-    solarload)
+    solarload, fakeSlice)
 
 # passed down geometry information
 dimx = cell_dim[0]
@@ -142,6 +150,8 @@ ticky = np.size(mesh_mask, 0)
 tickz = 3                       # default as always
 
 time_simulation = (time_end - time_start).total_seconds()
+if fakeSlice:
+    time_simulation = 3600 * 24 * fakeSlice
 
 # grab timestamps
 timestamps = []          # time stamps in second
@@ -149,29 +159,41 @@ for i in range(len(snapshots)):
     timestamps.append(i * time_step)
 
 # grab temperature seris from epw file
-series_temp = []
-series_time = []
-timeticks = 0
-f = open(epw_path, mode="r")
-for line in f.readlines():
-    datalist = line.split(',')
-    if len(datalist) == 35:
-        timeticks = timeticks + 1
-        if timeticks * 3600 > (time_start - time_init).total_seconds() and \
-            (timeticks - 1) * 3600 < (time_end - time_init).total_seconds():
-            if len(series_temp) == 0:
-                series_time.append(0.0)
-                series_temp.append(round(float(datalist[6]) + 273.15, 2))
-            else:
-                series_time.append((timeticks - 1) * 3600 - (time_start - time_init).total_seconds())
-                series_temp.append(round(float(datalist[6]) + 273.15, 2))
-
 temp_ambient = ""
-for i in range(len(series_temp)):
-    temp_ambient = temp_ambient + str(series_time[i]) + ", " + str(series_temp[i])
-    if i < len(series_temp) - 1:
-        temp_ambient = temp_ambient + "; "
-temp_init = series_temp[0]
+if fakeSlice:
+    series_temp, actual_temp = FakeInput(epw_path, fakeSlice)
+    series_time = [3600 * i for i in range(len(series_temp))]
+    series_temp = series_temp + delta_t
+    temp_init = series_temp[0]
+    for i in range(len(series_temp)):
+        temp_ambient = temp_ambient + str(series_time[i]) + ", " + str(series_temp[i])
+        if i < len(series_temp) - 1:
+            temp_ambient = temp_ambient + "; "
+else:
+    series_temp = []
+    series_time = []
+    timeticks = 0
+    f = open(epw_path, mode="r")
+    for line in f.readlines():
+        datalist = line.split(',')
+        if len(datalist) == 35:
+            timeticks = timeticks + 1
+            if timeticks * 3600 > (time_start - time_init).total_seconds() and \
+                (timeticks - 1) * 3600 < (time_end - time_init).total_seconds():
+                if len(series_temp) == 0:
+                    series_time.append(0.0)
+                    series_temp.append(round(float(datalist[6]) + 273.15 + delta_t, 2))
+                else:
+                    series_time.append((timeticks - 1) * 3600 - (time_start - time_init).total_seconds())
+                    series_temp.append(round(float(datalist[6]) + 273.15 + delta_t, 2))
+    temp_init = series_temp[0]
+
+    for i in range(len(series_temp)):
+        temp_ambient = temp_ambient + str(series_time[i]) + ", " + str(series_temp[i])
+        if i < len(series_temp) - 1:
+            temp_ambient = temp_ambient + "; "
+
+print(temp_ambient)
 
 # grab solar load
 solardistributions = []
@@ -269,15 +291,19 @@ np.savetxt("mask.csv", mesh_mask, fmt='%d', delimiter=',')
 fo = open(model_name + ".mo", "w")
 fo.write("within VEPZO.Samples;\n")
 fo.write("model " + model_name + "\n")
+# fo.write("  import VEPZO;\n")
 fo.write("  Modelica.Blocks.Sources.TimeTable ambient(table = [{0}]);\n".format(temp_ambient))
 for zone in zonelist:
     if zone != None:
         if zone.idx < tickx * ticky:
-            fo.write("  Zone {0}(IsSource = true, dx = {1}, dy = {2}, dz = {3}, T_0 = {4});\n".
-                format(zone.name, dimx, dimy, dimz, temp_init))
-            fo.write("  Modelica.Blocks.Sources.TimeTable solar{0}(table = [{1}]);\n".
-                format(zone.idx, ZipTimeTable(timestamps, solarseries[zone.idx])))
-            fo.write("  Modelica.Thermal.HeatTransfer.Sources.PrescribedHeatFlow heatFlow{0};\n".format(zone.idx))
+            fo.write("  Zone {0}(dx = {1}, dy = {2}, dz = {3}, T_0 = {4});\n"
+                .format(zone.name, dimx, dimy, dimz, temp_init))
+
+            # fo.write("  Zone {0}(IsSource = true, dx = {1}, dy = {2}, dz = {3}, T_0 = {4});\n"
+            #     .format(zone.name, dimx, dimy, dimz, temp_init))
+            # fo.write("  Modelica.Blocks.Sources.TimeTable solar{0}(table = [{1}]);\n"
+            #     .format(zone.idx, ZipTimeTable(timestamps, solarseries[zone.idx])))
+            # fo.write("  Modelica.Thermal.HeatTransfer.Sources.PrescribedHeatFlow heatFlow{0};\n".format(zone.idx))
         else:
             fo.write("  Zone {0}(dx = {1}, dy = {2}, dz = {3}, T_0 = {4});\n"
                 .format(zone.name, dimx, dimy, dimz, temp_init))
@@ -292,23 +318,49 @@ for wall in walllist:
     else:
         area = dimx * dimy
 
-    if wall.idxIn in adiabaticZonelist and wall.direction == 2:
-        print("Adiabatic (top/bottom)")
-        fo.write("  Wall {0}(Direction = {1});\n".format(wall.name, wall.direction))
-        continue
-    if RetrieveAdjacencyMask(wall.idxIn, tickx, ticky, mesh_mask, wall.portIn) == 2:
-        print("Adiabatic (hole)")
-        fo.write("  Wall {0}(Direction = {1});\n".format(wall.name, wall.direction))
-        continue
-    if RetrieveAdjacencyMask(wall.idxIn, tickx, ticky, mesh_mask, wall.portIn) == 3:
-        print("Adiabatic (manual)")
-        fo.write("  Wall {0}(Direction = {1});\n".format(wall.name, wall.direction))
-        continue
-    print("Temperature (epw)")
-    fo.write("  Wall {0}(Direction = {1}, IsSource = true);\n".format(wall.name, wall.direction))
-    fo.write("  Modelica.Thermal.HeatTransfer.Sources.PrescribedTemperature temp{0};\n".format(wall.idx))
-    fo.write("  Modelica.Thermal.HeatTransfer.Components.ThermalResistor wallR{0}(R = {1});\n".format(wall.idx, resistance / area))
-    fo.write("  Modelica.Thermal.HeatTransfer.Components.HeatCapacitor wallC{0}(C = {1}, T.start = {2});\n".format(wall.idx, capacity * area, temp_init))
+    # type 1, on the floor, assigned with port_s from solar load
+    # type 2, on outer boundary, assigned with port_t from prescribed env temperature
+    # type 3, elsewhere, adiabatic with capacity only
+    if wall.idxIn < tickx * ticky and wall.direction == 2:
+        fo.write("  Wall {0}(IsSource = true, Direction = {1}, R = {2}, C = {3}, T_0 = {4});\n"
+            .format(wall.name, wall.direction, resistance / area, capacity * area, temp_init))
+        fo.write("  Modelica.Blocks.Sources.TimeTable solar{0}(table = [{1}]);\n"
+            .format(wall.idx, ZipTimeTable(timestamps, solarseries[wall.idxIn])))
+        fo.write("  Modelica.Thermal.HeatTransfer.Sources.PrescribedHeatFlow heatFlow{0};\n".format(wall.idx))
+    elif wall.direction != 2 and RetrieveAdjacencyMask(wall.idxIn, tickx, ticky, mesh_mask, wall.portIn) == 0:
+        fo.write("  Wall {0}(IsAdiabatic = false, Direction = {1}, R = {2}, C = {3}, T_0 = {4});\n"
+            .format(wall.name, wall.direction, resistance / area, capacity * area, temp_init))
+        fo.write("  Modelica.Thermal.HeatTransfer.Sources.PrescribedTemperature temp{0};\n".format(wall.idx))
+        fo.write("  Modelica.Thermal.HeatTransfer.Components.ThermalResistor wallR{0}(R = {1});\n"
+            .format(wall.idx, 0.001))
+        fo.write("  Modelica.Thermal.HeatTransfer.Components.HeatCapacitor wallC{0}(C = {1}, T.start = {2});\n"
+            .format(wall.idx, 100000000, temp_init))
+    else:
+        fo.write("  Wall {0}(Direction = {1}, R = {2}, C = {3}, T_0 = {4});\n"
+            .format(wall.name, wall.direction, resistance / area, capacity * area, temp_init))
+
+    # if wall.idxIn in adiabaticZonelist and wall.direction == 2:
+    #     print("Adiabatic (top/bottom)")
+    #     fo.write("  Wall {0}(Direction = {1}, R = {2}, C = {3});\n".format(wall.name, wall.direction, 
+    #         resistance / area, capacity * area))
+    #     continue
+    # if RetrieveAdjacencyMask(wall.idxIn, tickx, ticky, mesh_mask, wall.portIn) == 2:
+    #     print("Adiabatic (hole)")
+    #     fo.write("  Wall {0}(Direction = {1}, R = {2}, C = {3});\n".format(wall.name, wall.direction, 
+    #         resistance / area, capacity * area))
+    #     continue
+    # if RetrieveAdjacencyMask(wall.idxIn, tickx, ticky, mesh_mask, wall.portIn) == 3:
+    #     print("Adiabatic (manual)")
+    #     fo.write("  Wall {0}(Direction = {1}, R = {2}, C = {3});\n".format(wall.name, wall.direction, 
+    #         resistance / area, capacity * area))
+    #     continue
+    # print("Temperature (epw)")
+    # fo.write("  Wall {0}(Direction = {1}, IsSource = true);\n".format(wall.name, wall.direction))
+    # fo.write("  Modelica.Thermal.HeatTransfer.Sources.PrescribedTemperature temp{0};\n".format(wall.idx))
+    # fo.write("  Modelica.Thermal.HeatTransfer.Components.ThermalResistor wallR{0}(R = {1});\n"
+    #     .format(wall.idx, resistance / area))
+    # fo.write("  Modelica.Thermal.HeatTransfer.Components.HeatCapacitor wallC{0}(C = {1}, T.start = {2});\n"
+    #     .format(wall.idx, capacity * area, temp_init))
 
 fo.write("equation\n")
 for flow in flowlist:
@@ -329,18 +381,29 @@ for flow in flowlist:
 for zone in zonelist:
     if zone != None:
         if zonelist.index(zone) < tickx * ticky:
-            fo.write("  connect({0}.port_s, heatFlow{1}.port);\n".format(zone.name, zone.idx))
-            fo.write("  connect(solar{0}.y, heatFlow{1}.Q_flow);\n".format(zone.idx, zone.idx))
+            pass
+            # fo.write("  connect({0}.port_s, heatFlow{1}.port);\n".format(zone.name, zone.idx))
+            # fo.write("  connect(solar{0}.y, heatFlow{1}.Q_flow);\n".format(zone.idx, zone.idx))
         for i in range(6):
             fo.write("  connect({0}.i[{1}], {2}.o);\n".format(zone.name, i+1, zone.port[i]))
 for wall in walllist:
     fo.write("  connect({0}.i, {1}.o);\n".format(wall.name, "zone" + str(wall.idxIn)))
     adjMaskValue = RetrieveAdjacencyMask(wall.idxIn, tickx, ticky, mesh_mask, wall.portIn)
-    if not (wall.idxIn in adiabaticZonelist and wall.direction == 2) and adjMaskValue == 0:
+    if wall.idxIn < tickx * ticky and wall.direction == 2:
+        fo.write("  connect(wall{0}.port_s, heatFlow{1}.port);\n".format(wall.idx, wall.idx))
+        fo.write("  connect(solar{0}.y, heatFlow{1}.Q_flow);\n".format(wall.idx, wall.idx))
+    elif wall.direction != 2 and adjMaskValue == 0:
         fo.write("  connect(temp{0}.T, ambient.y);\n".format(wall.idx))
         fo.write("  connect(temp{0}.port, wallR{1}.port_b);\n".format(wall.idx, wall.idx))
-        fo.write("  connect(wallR{0}.port_a, wall{1}.port_s);\n".format(wall.idx, wall.idx))
+        fo.write("  connect(wallR{0}.port_a, wall{1}.port_t);\n".format(wall.idx, wall.idx))
         fo.write("  connect(wallC{0}.port, wallR{1}.port_a);\n".format(wall.idx, wall.idx))
+    else:
+        pass
+    # if not (wall.idxIn in adiabaticZonelist and wall.direction == 2) and adjMaskValue == 0:
+    #     fo.write("  connect(temp{0}.T, ambient.y);\n".format(wall.idx))
+    #     fo.write("  connect(temp{0}.port, wallR{1}.port_b);\n".format(wall.idx, wall.idx))
+    #     fo.write("  connect(wallR{0}.port_a, wall{1}.port_s);\n".format(wall.idx, wall.idx))
+    #     fo.write("  connect(wallC{0}.port, wallR{1}.port_a);\n".format(wall.idx, wall.idx))
 # expriment configuration only for Wolfram
 fo.write("annotation(experiment(StopTime = {0}, __Wolfram_NumberOfIntervals = -1));\n".format(time_simulation))
         

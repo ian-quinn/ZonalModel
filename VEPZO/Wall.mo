@@ -4,11 +4,14 @@ model Wall
   package Medium = Modelica.Media.Air.SimpleAir "Medium model";
   parameter Integer Direction;
   parameter Boolean IsSource = false;
-  parameter SI.Temperature T0 = SI.Conversions.from_degC(20);
+  parameter Boolean IsAdiabatic = true;
+  parameter SI.Temperature T_0 = SI.Conversions.from_degC(20);
   parameter SI.CoefficientOfHeatTransfer hc = 3.7;
+  parameter SI.CoefficientOfHeatTransfer hcout = 7.6;
   parameter SI.ThermalResistance R = 0.1;
-  parameter SI.HeatCapacity C = 600;
+  parameter SI.HeatCapacity C = 60000;
   HeatPort port_s if IsSource annotation(Placement(visible = true, transformation(origin = {75, 67.532}, extent = {{-10, -10}, {10, 10}}, rotation = 0), iconTransformation(origin = {80, 50}, extent = {{-10, -10}, {10, 10}}, rotation = 0)));
+  HeatPort port_t if not IsAdiabatic;
   AirPort_a port_a annotation(Placement(transformation(extent = {{-10, 80}, {10, 100}}, origin = {0, 0}, rotation = 0), visible = true, iconTransformation(origin = {80, 0}, extent = {{-10, 80}, {10, 100}}, rotation = 0)));
   Medium.BaseProperties medium;
   ZBeeperIn i;
@@ -17,8 +20,12 @@ model Wall
   Real gradV;
   Real gradW;
   SI.Area A;
-  SI.HeatFlowRate Q_flow if IsSource;
+  SI.Temperature T;
+  SI.HeatFlowRate Q_flow;
+  //SI.HeatFlowRate Q_flow if IsSource;
   //SI.Temperature Tw if IsSource;
+initial equation
+  T = T_0;
 equation
   if Direction == 0 then
     gradV = 2 * i.v / i.dx;
@@ -41,12 +48,21 @@ equation
   port_a.p = medium.p;
   port_a.h = medium.h;
   port_a.m_flow = 0;
+  // wall function
+  medium.T - T = 1 / (A * hc) * port_a.H_flow;
   if IsSource then
-    medium.T - port_s.T = (R + 1 / (A * hc)) * Q_flow;
-    port_a.H_flow = Q_flow;
-    port_s.Q_flow = -Q_flow;
+    //medium.T - port_s.T = (R + 1 / (A * hc)) * Q_flow;
+    port_s.T = T;
+    port_a.H_flow + port_s.Q_flow = der(T) * C + Q_flow;
   else
-    port_a.H_flow = 0;
+    //port_a.H_flow = 0;
+    port_a.H_flow = der(T) * C + Q_flow;
+  end if;
+  if IsAdiabatic then
+    Q_flow = 0;
+  else
+    T - port_t.T = R * Q_flow;
+    port_t.Q_flow = Q_flow;
   end if;
   o.gradU = gradU;
   o.gradV = gradV;

@@ -132,6 +132,13 @@ def PileUpList(flatlist, dimx, dimy):
 			sub = []
 	return nests
 
+def SumupList(thislist):
+	value = 0
+	for row in thislist:
+		for col in row:
+			value = value + col
+	return value
+
 # wall dimension:				______
 #  ________ 1111111111111111111  dimz
 #	win_h	1111111110000001111
@@ -177,13 +184,14 @@ def ProjectWall(ptA, ptB, zelta, theta, gap, sill, win_h)->" \
 
 
 def GetMesh(
-	polyloops:"nested lists of vertice coords representing exterior/interior boundary", 
+	polyloops:"nested lists of vertices coords representing exterior/interior boundary", 
 	mask_wwr:"list of window to wall ratio of each wall. duplicate the last if not enough", 
 	mask_adia:"list of boundary condition of each wall. duplicate the last if not enough", 
 	scale_factor:"the default mesh cell will be 1m * 1m times this value", 
 	location:"tuple for your location: (latitude, longitude, utc)", 
 	stopwatch:"tuple for simulation time: (time_start, time_end, time_delta)", 
-	solarload:"solar radiation, apply a discount on 1380 W/m2 according to lattitude and clearness")->" \
+	solarload:"solar radiation, apply a discount on 1380 W/m2 according to latitude and clearness",
+	fakeslice:"> 0 to fake some typical days representing the whole year run") ->" \
 	Returns snapshots, a nested lists representing solar load of each time step. \
 	Returns mesh_mask, a 2d array representing floorplan mesh and the boundary condition. \
 	Returns cell_dim, a tuple of cell dimension: (x, y)":
@@ -205,8 +213,8 @@ def GetMesh(
 		mask_adia.append(0)
 
 	dimz = 3
-	gap = 0.2
-	sill = 1
+	gap = 0
+	sill = 0.5
 
 	# x-y bounding box is a (minx, miny, maxx, maxy) tuple
 	dimx = floorplan.bounds[2] - floorplan.bounds[0]
@@ -286,14 +294,32 @@ def GetMesh(
 	# projection vector
 	zeltas = []         # in degree North-0 East-90 South-180 West-270
 	thetas = []         # in degree Horizontal-0 Perpendicular-90
-	time_ellapse = 0    # accumulated time in second
-	time_current = stopwatch[0]
-	while time_current < stopwatch[1]:
-	    time_current += stopwatch[2]
-	    thetas.append(math.radians(getSEA(
-	    	time_current.timetuple(), location[0], location[1], location[2])))
-	    zeltas.append(math.radians(getAZ(
-	    	time_current.timetuple(), location[0], location[1], location[2])))
+	#time_ellapse = 0    # accumulated time in second
+
+	# under fake mode, the sun position will be sampled evenly according to slice number
+	# note that the June/December 22 will always be sampled (the highest/lowest) position
+	if fakeslice:
+		# convert 1-366 julian days to standard datetime
+		sampledays = [datetime.datetime.strptime(str(int(366/fakeslice)*(i+1)), '%j') \
+			for i in range(fakeslice)]
+		for date in sampledays:
+			# offset a little bit to make June 22 at the center
+			time_current = date - datetime.timedelta(days=7)
+			time_stop = time_current + datetime.timedelta(hours=24)
+			while time_current < time_stop:
+				time_current += stopwatch[2]
+				thetas.append(math.radians(getSEA(
+					time_current.timetuple(), location[0], location[1], location[2])))
+				zeltas.append(math.radians(getAZ(
+					time_current.timetuple(), location[0], location[1], location[2])))
+	else:
+		time_current = stopwatch[0]
+		while time_current < stopwatch[1]:
+			time_current += stopwatch[2]
+			thetas.append(math.radians(getSEA(
+				time_current.timetuple(), location[0], location[1], location[2])))
+			zeltas.append(math.radians(getAZ(
+				time_current.timetuple(), location[0], location[1], location[2])))
 	# print(thetas)
 	# print(zeltas)
 
@@ -320,7 +346,7 @@ def GetMesh(
 			length = math.sqrt(
 				math.pow(outerloop[v + 1][0] - outerloop[v][0], 2) + 
 				math.pow(outerloop[v + 1][1] - outerloop[v][1], 2))
-			win_height = length * dimz * mask_wwr[v] / (length - 2 * gap) - sill
+			win_height = length * dimz * mask_wwr[v] / (length - 2 * gap)
 			(shadow, tao) = ProjectWall(outerloop[v], outerloop[v + 1], 
 				zeltas[i], thetas[i], gap, sill, win_height)
 			shadow_area = shadow.area
@@ -373,12 +399,14 @@ def GetMesh(
 				# 	checker += "{{{0:2f}, {1:2f}, 0}}# ".format(pt[0], pt[1])
 				# checker += "\n"
 
-				mask_solar[j] += (sect.area / shadow_area) * area * solarload
+				mask_solar[j] += round((sect.area / shadow_area) * area * solarload, 2)
 
 		frame_solar.append(PileUpList(mask_solar, tickx + 2, ticky + 2))
 
 
 	# print(checker)
+	for snapshot in frame_solar:
+		print(np.array(snapshot))
 
 	return frame_solar, mask_mesh, cell_dimension
 
@@ -386,35 +414,36 @@ def GetMesh(
 if __name__ =='__main__':
 
 	# DIAMOND
-	vertexloops = [[[3, 0], [10, 0], [10, 7], [7, 10], [0, 10], [0, 3], [3, 0]], 
-		 [[4, 4], [6, 4], [6, 6], [4, 6], [4, 4]]]
+	# vertexloops = [[[3, 0], [10, 0], [10, 7], [7, 10], [0, 10], [0, 3], [3, 0]], 
+	# 	 [[4, 4], [6, 4], [6, 6], [4, 6], [4, 4]]]
 
 	# RAND
-	# vertexloops = [[[4, 0], [10, 0], [10, 5], [6, 5], [6, 10], [0, 10], [0, 5], [4, 5], [4, 0]]]
+	# vertexloops = [[[12, 0], [30, 0], [30, 15], [18, 15], [18, 30], [0, 30], [0, 15], [12, 15], [12, 0]]]
 
 	# SNAKE
 	# vertexloops = [[[0, 0], [11, 0], [11, 3], [2, 3], [2, 4], [11, 4], [11, 11], [0, 11], [0, 8], \
 	#    [9, 8], [9, 7], [0, 7], [0, 0]]]
 
 	# FRAME
-	# vertexloops = [[[0, 0], [10, 0], [10, 10], [0, 10], [0, 0]], \
-	# 	[[3, 3], [7, 3], [7, 7], [3, 7], [3, 3]]]
+	# vertexloops = [[[0, 0], [21, 0], [21, 21], [0, 21], [0, 0]], \
+	# 	[[6, 6], [15, 6], [15, 15], [6, 15], [6, 6]]]
 
-	# vertexloops = [[[0, 0], [10, 0], [10, 10], [0, 10], [0, 0]]]
+	vertexloops = [[[0, 0], [9, 0], [9, 9], [0, 9], [0, 0]]]
 
-	# mask_wwr = [0.8]
-	mask_wwr = [0.8, 0]
-	mask_adia = [0, 0, 0, 1, 1, 0]
+	mask_wwr = [0.8]
+	# mask_wwr = [0.8, 0]
+	# mask_adia = [0, 0, 1, 1, 1, 0, 0, 0, 1, 1, 1, 0]
+	mask_adia = [0, 0, 0, 0, 0]
 
-	scale_factor = 1
+	scale_factor = 3
 
-	latitude = 33
-	longitude = 122
+	latitude = 31.17
+	longitude = 121.43
 	utc = 8      # time zone
 
-	time_step = 600					# in seconds
-	time_start = datetime.datetime.strptime("2022-01-01 00:00:00", "%Y-%m-%d %H:%M:%S")
-	time_end = datetime.datetime.strptime("2022-01-01 23:59:59", "%Y-%m-%d %H:%M:%S")
+	time_step = 3600					# in seconds
+	time_start = datetime.datetime.strptime("2022-06-22 00:00:00", "%Y-%m-%d %H:%M:%S")
+	time_end = datetime.datetime.strptime("2022-06-22 23:59:59", "%Y-%m-%d %H:%M:%S")
 	time_delta = datetime.timedelta(seconds=time_step)
 
 	solarload = 500
@@ -423,13 +452,14 @@ if __name__ =='__main__':
 		vertexloops, mask_wwr, mask_adia, scale_factor, 
 		(latitude, longitude, utc), 
 		(time_start, time_end, time_delta), 
-		solarload)
+		solarload, 0)
 
 	# visualize radiation intensity on the floorplan
 	maxRadiation = 0
 	for snapshot in snapshots:
 		if np.max(snapshot) > maxRadiation:
 			maxRadiation = np.max(snapshot)
+	print(maxRadiation)
 
 	fig = plt.figure(figsize=(5,5), dpi=72)
 	xlattice = np.arange(0, len(snapshots[0][0]) + 1)
@@ -461,7 +491,7 @@ if __name__ =='__main__':
 		def finish(self):
 			self._frames[0].save(
 				self.outfile, save_all=True, append_images=self._frames[1:],
-					duration=int(1000 / self.fps), loop=0)
+					duration=int(500 / self.fps), loop=0)
 	img_ani.save(r"animation.gif", writer=LoopingPillowWriter(fps=20))
 	# img_ani.save(r"animation.gif", writer=animation.PillowWriter(fps=30))
 	# img_ani.save(r"animation.gif", writer='imagemagick')
