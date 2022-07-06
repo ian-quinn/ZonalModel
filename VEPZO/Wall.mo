@@ -5,6 +5,7 @@ model Wall
   parameter Integer Direction;
   parameter Boolean IsSource = false;
   parameter Boolean IsAdiabatic = true;
+  parameter Boolean IsRadiated = false;
   parameter SI.Temperature T_0 = SI.Conversions.from_degC(20);
   parameter SI.CoefficientOfHeatTransfer hc = 3.7;
   parameter SI.CoefficientOfHeatTransfer hcout = 7.6;
@@ -12,6 +13,7 @@ model Wall
   parameter SI.HeatCapacity C = 60000;
   HeatPort port_s if IsSource annotation(Placement(visible = true, transformation(origin = {75, 67.532}, extent = {{-10, -10}, {10, 10}}, rotation = 0), iconTransformation(origin = {80, 50}, extent = {{-10, -10}, {10, 10}}, rotation = 0)));
   HeatPort port_t if not IsAdiabatic;
+  HeatPort port_r if IsRadiated;
   AirPort_a port_a annotation(Placement(transformation(extent = {{-10, 80}, {10, 100}}, origin = {0, 0}, rotation = 0), visible = true, iconTransformation(origin = {80, 0}, extent = {{-10, 80}, {10, 100}}, rotation = 0)));
   Medium.BaseProperties medium;
   ZBeeperIn i;
@@ -48,15 +50,26 @@ equation
   port_a.p = medium.p;
   port_a.h = medium.h;
   port_a.m_flow = 0;
+  if IsRadiated then
+    port_r.T = T;
+  end if;
   // wall function
-  medium.T - T = 1 / (A * hc) * port_a.H_flow;
+  medium.T - T = (R + 1 / (A * hc)) * port_a.H_flow;
   if IsSource then
     //medium.T - port_s.T = (R + 1 / (A * hc)) * Q_flow;
     port_s.T = T;
-    port_a.H_flow + port_s.Q_flow = der(T) * C + Q_flow;
+    if IsRadiated then
+      port_a.H_flow + port_s.Q_flow = der(T) * C + Q_flow + port_r.Q_flow;
+    else
+      port_a.H_flow + port_s.Q_flow = der(T) * C + Q_flow;
+    end if;
   else
     //port_a.H_flow = 0;
-    port_a.H_flow = der(T) * C + Q_flow;
+    if IsRadiated then
+      port_a.H_flow = der(T) * C + Q_flow + port_r.Q_flow;
+    else
+      port_a.H_flow = der(T) * C + Q_flow;
+    end if;
   end if;
   if IsAdiabatic then
     Q_flow = 0;

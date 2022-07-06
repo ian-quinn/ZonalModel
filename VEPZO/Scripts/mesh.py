@@ -190,11 +190,16 @@ def GetMesh(
 	scale_factor:"the default mesh cell will be 1m * 1m times this value", 
 	location:"tuple for your location: (latitude, longitude, utc)", 
 	stopwatch:"tuple for simulation time: (time_start, time_end, time_delta)", 
-	solarload:"solar radiation, apply a discount on 1380 W/m2 according to latitude and clearness",
+	solarload:"solar radiation, 1380 W/m2 * latitude * clearness * SHGC",
+	SHGC:"solar heat gain coefficient",
+	epw_path:"load solar beam & diffusion from TMY if provided", 
 	fakeslice:"> 0 to fake some typical days representing the whole year run") ->" \
 	Returns snapshots, a nested lists representing solar load of each time step. \
 	Returns mesh_mask, a 2d array representing floorplan mesh and the boundary condition. \
 	Returns cell_dim, a tuple of cell dimension: (x, y)":
+
+	time_init = datetime.datetime.strptime("2022-01-01 00:00:00", "%Y-%m-%d %H:%M:%S")
+
 
 	# unzip polyloops to Shapely Polygon
 	# the polyloops must be a nested loops (list)
@@ -230,7 +235,7 @@ def GetMesh(
 	# cache shell/holes list for coords tuples
 	# convert shapely.coords.CoordinateSequence obj to list
 	outerloop = list(floorplan.exterior.coords)
-	print(outerloop)
+	# print(outerloop)
 	outerpatch = Polygon(floorplan.exterior)
 	outeredge_adia = []
 	for i in range(len(outerloop) - 1):
@@ -286,7 +291,7 @@ def GetMesh(
 	# OUTPUT VARIABLE
 	cell_dimension = (dimx / tickx, dimy / ticky)
 
-	print(mask_mesh)
+	# print(mask_mesh)
 
 	# sum(sum(mask_mesh))
 	mask_mesh_1d = mask_mesh.flatten()
@@ -322,6 +327,26 @@ def GetMesh(
 				time_current.timetuple(), location[0], location[1], location[2])))
 	# print(thetas)
 	# print(zeltas)
+
+	# if beam/diffuse radiation from TMY is loaded
+	# overwrite the solarload variable
+	if epw_path:
+		series_beam = []
+		series_time = []
+		timeticks = 0
+		f = open(epw_path, mode="r")
+		for line in f.readlines():
+			datalist = line.split(',')
+			if len(datalist) == 35:
+				timeticks = timeticks + 1
+				if timeticks * 3600 > (stopwatch[0] - time_init).total_seconds() and \
+					(timeticks - 1) * 3600 < (stopwatch[1] - time_init).total_seconds():
+					series_beam.append(int(datalist[13]))
+					if len(series_beam) == 0:
+						series_time.append(0.0)
+					else:
+						series_time.append((timeticks - 1) * 3600 - (stopwatch[0] - time_init).total_seconds())
+						
 
 	# a 1d array that recreates the matrix from top to bottom (negative y axis)
 	mask_mesh_compressed = mask_mesh.reshape(1, (tickx + 2) * (ticky + 2))
@@ -399,14 +424,22 @@ def GetMesh(
 				# 	checker += "{{{0:2f}, {1:2f}, 0}}# ".format(pt[0], pt[1])
 				# checker += "\n"
 
-				mask_solar[j] += round((sect.area / shadow_area) * area * solarload, 2)
+				# if use TMY and not in fake mode, overwrite the solarload
+				if epw_path and fakeslice:
+					for k in range(len(series_time)):
+						if i * stopwatch[2].total_seconds() < series_time[k]:
+							solarload = series_beam[k - 1]
+							# print("update solar as " + str(solarload))
+							break;
+
+				mask_solar[j] += round((sect.area / shadow_area) * area * solarload * SHGC, 2)
 
 		frame_solar.append(PileUpList(mask_solar, tickx + 2, ticky + 2))
 
 
 	# print(checker)
-	for snapshot in frame_solar:
-		print(np.array(snapshot))
+	# for snapshot in frame_solar:
+		# print(np.array(snapshot))
 
 	return frame_solar, mask_mesh, cell_dimension
 
@@ -452,14 +485,14 @@ if __name__ =='__main__':
 		vertexloops, mask_wwr, mask_adia, scale_factor, 
 		(latitude, longitude, utc), 
 		(time_start, time_end, time_delta), 
-		solarload, 0)
+		solarload, "", 0)
 
 	# visualize radiation intensity on the floorplan
 	maxRadiation = 0
 	for snapshot in snapshots:
 		if np.max(snapshot) > maxRadiation:
 			maxRadiation = np.max(snapshot)
-	print(maxRadiation)
+	# print(maxRadiation)
 
 	fig = plt.figure(figsize=(5,5), dpi=72)
 	xlattice = np.arange(0, len(snapshots[0][0]) + 1)
