@@ -186,8 +186,8 @@ def ProjectWall(ptA, ptB, zelta, theta, gap, sill, win_h)->" \
 def GetMesh(
 	polyloops:"nested lists of vertices coords representing exterior/interior boundary", 
 	mask_wwr:"list of window to wall ratio of each wall. duplicate the last if not enough", 
-	mask_adia:"list of boundary condition of each wall. duplicate the last if not enough", 
-	scale_factor:"the default mesh cell will be 1m * 1m times this value", 
+	mask_adiabatic:"list of boundary condition of each wall. duplicate the last if not enough", 
+	mesh_scale:"the default mesh cell will be 1m * 1m times this value", 
 	location:"tuple for your location: (latitude, longitude, utc)", 
 	stopwatch:"tuple for simulation time: (time_start, time_end, time_delta)", 
 	solarload:"solar radiation, 1380 W/m2 * latitude * clearness * SHGC",
@@ -214,8 +214,8 @@ def GetMesh(
 
 	while len(mask_wwr) < len(polyloops[0]):
 		mask_wwr.append(mask_wwr[len(mask_wwr) - 1])
-	while len(mask_adia) < len(polyloops[0]):
-		mask_adia.append(0)
+	while len(mask_adiabatic) < len(polyloops[0]):
+		mask_adiabatic.append(0)
 
 	dimz = 3
 	gap = 0
@@ -224,8 +224,8 @@ def GetMesh(
 	# x-y bounding box is a (minx, miny, maxx, maxy) tuple
 	dimx = floorplan.bounds[2] - floorplan.bounds[0]
 	dimy = floorplan.bounds[3] - floorplan.bounds[1]
-	tickx = FitDimension(dimx, scale_factor)
-	ticky = FitDimension(dimy, scale_factor)
+	tickx = FitDimension(dimx, mesh_scale)
+	ticky = FitDimension(dimy, mesh_scale)
 	# update floorplan by moving it to the origin
 	floorplan = shapely.affinity.translate(
 		floorplan, -floorplan.bounds[0], -floorplan.bounds[1])
@@ -239,7 +239,7 @@ def GetMesh(
 	outerpatch = Polygon(floorplan.exterior)
 	outeredge_adia = []
 	for i in range(len(outerloop) - 1):
-		if mask_adia[i] == 1:
+		if mask_adiabatic[i] == 1:
 			outeredge_adia.append(LineString([outerloop[i], outerloop[i + 1]]))
 		else:
 			outeredge_adia.append(None)
@@ -445,47 +445,46 @@ def GetMesh(
 
 
 if __name__ =='__main__':
+	'''
+	DIAMOND
+	POLYGON = [[[3, 0], [10, 0], [10, 7], [7, 10], [0, 10], [0, 3], [3, 0]], 
+		 [[4, 4], [6, 4], [6, 6], [4, 6], [4, 4]]]
 
-	# DIAMOND
-	# vertexloops = [[[3, 0], [10, 0], [10, 7], [7, 10], [0, 10], [0, 3], [3, 0]], 
-	# 	 [[4, 4], [6, 4], [6, 6], [4, 6], [4, 4]]]
+	RAND
+	POLYGON = [[[12, 0], [30, 0], [30, 15], [18, 15], [18, 30], [0, 30], [0, 15], [12, 15], [12, 0]]]
 
-	# RAND
-	# vertexloops = [[[12, 0], [30, 0], [30, 15], [18, 15], [18, 30], [0, 30], [0, 15], [12, 15], [12, 0]]]
+	SNAKE
+	POLYGON = [[[0, 0], [11, 0], [11, 3], [2, 3], [2, 4], [11, 4], [11, 11], [0, 11], [0, 8], \
+	   [9, 8], [9, 7], [0, 7], [0, 0]]]
 
-	# SNAKE
-	# vertexloops = [[[0, 0], [11, 0], [11, 3], [2, 3], [2, 4], [11, 4], [11, 11], [0, 11], [0, 8], \
-	#    [9, 8], [9, 7], [0, 7], [0, 0]]]
+	FRAME
+	POLYGON = [[[0, 0], [21, 0], [21, 21], [0, 21], [0, 0]], \
+		[[6, 6], [15, 6], [15, 15], [6, 15], [6, 6]]]
+	'''
 
-	# FRAME
-	# vertexloops = [[[0, 0], [21, 0], [21, 21], [0, 21], [0, 0]], \
-	# 	[[6, 6], [15, 6], [15, 15], [6, 15], [6, 6]]]
+	POLYGON = [[[0, 0], [9, 0], [9, 9], [0, 9], [0, 0]]]
 
-	vertexloops = [[[0, 0], [9, 0], [9, 9], [0, 9], [0, 0]]]
+	MASK_WWR = [0.8]
+	MASK_ADIABATIC = [0, 0, 0, 0, 0]
 
-	mask_wwr = [0.8]
-	# mask_wwr = [0.8, 0]
-	# mask_adia = [0, 0, 1, 1, 1, 0, 0, 0, 1, 1, 1, 0]
-	mask_adia = [0, 0, 0, 0, 0]
+	MESH_SCALE = 3
 
-	scale_factor = 3
+	LATITUDE = 31.17
+	LONGITUDE = 121.43
+	UTC = 8
 
-	latitude = 31.17
-	longitude = 121.43
-	utc = 8      # time zone
+	TIME_STEP = 3600					# in seconds
+	TIME_START = datetime.datetime.strptime("2022-06-22 00:00:00", "%Y-%m-%d %H:%M:%S")
+	TIME_END = datetime.datetime.strptime("2022-06-22 23:59:59", "%Y-%m-%d %H:%M:%S")
+	TIME_DELTA = datetime.timedelta(seconds=time_step)
 
-	time_step = 3600					# in seconds
-	time_start = datetime.datetime.strptime("2022-06-22 00:00:00", "%Y-%m-%d %H:%M:%S")
-	time_end = datetime.datetime.strptime("2022-06-22 23:59:59", "%Y-%m-%d %H:%M:%S")
-	time_delta = datetime.timedelta(seconds=time_step)
-
-	solarload = 500
+	BEAM_RAD = 500
 
 	(snapshots, mask_mesh, mesh_dim) = GetMesh(
-		vertexloops, mask_wwr, mask_adia, scale_factor, 
-		(latitude, longitude, utc), 
-		(time_start, time_end, time_delta), 
-		solarload, "", 0)
+		POLYGON, MASK_WWR, MASK_ADIABATIC, MESH_SCALE, 
+		(LATITUDE, LONGITUDE, UTC), 
+		(TIME_START, TIME_END, TIME_DELTA), 
+		BEAM_RAD, "", 0)
 
 	# visualize radiation intensity on the floorplan
 	maxRadiation = 0
