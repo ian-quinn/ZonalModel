@@ -1,7 +1,7 @@
 within VEPZO;
 
 model Bound
-  Modelica.SIunits.HeatFlowRate Q_flow "Heat flow rate from port_a -> port_b";
+  SI.HeatFlowRate Q_flow "Heat flow rate from port_a -> port_b";
   HeatPort port_a;
   HeatPort port_b;
 equation

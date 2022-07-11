@@ -50,6 +50,8 @@ def ZipTimeTable(time, value):
 # module class
 
 class Zone(object):
+    is_loaded = False
+    t_0 = 293.15
     def __init__(self, idx, coords, dims):
         self._idx = idx
         self._coords = coords
@@ -60,15 +62,14 @@ class Zone(object):
         self.dx = dims[0]
         self.dy = dims[1]
         self.dz = dims[2]
-        self.t_0 = 293.15
 
     def __repr__(self):
         print("zone{0} ({1}, {2}, {3})".format(
             self.idx, self.coords[0], self.coords[1], self.coords[2]))
 
     def Serialize(self):
-        return "  Zone {}(dx = {}, dy = {}, dz = {}, T_0 = {:.2f};\n"\
-            .format(self.name, self.dx, self.dy, self.dz, self.t_0)
+        return "  Zone {}(IsSource = {}, dx = {}, dy = {}, dz = {}, T_0 = {:.2f});\n"\
+            .format(self.name, str(self.is_loaded).lower(), self.dx, self.dy, self.dz, self.t_0)
 
 class Flow(object):
     def __init__(self, idx, direction, idxA, idxB, portA, portB):
@@ -84,9 +85,16 @@ class Flow(object):
         print("flow{0} direction{1} {2}/{3}".format(self.idxIn, self.direction, self.idxIn, self.idxOut))
 
     def Serialize(self):
-        return "  Flow {}(Direction = {};\n".format(self.name, self.direction)
+        return "  Flow {}(Direction = {});\n".format(self.name, self.direction)
 
 class Wall(object):
+    resistance = 9
+    capacity = 99999
+    t_0 = 293.15
+    is_solarloaded = False
+    is_adiabatic = False
+    is_radiated = False
+    is_transparent = False
     def __init__(self, idx, direction, idxA, portA, coords, dims):
         area = 1
         if direction == 0: area = dims[1] * dims[2]
@@ -104,22 +112,16 @@ class Wall(object):
         self.direction = direction
         self.normal = np.array(normal)
         self.area = area
-        self.resistance = 1
-        self.capacity = 10000
-        self.t_0 = 293.15
-        self.is_solarloaded = False
-        self.is_adiabatic = False
-        self.is_radiated = False
-        self.is_transparent = False
         
     def __repr__(self):
         print("wall{0} direction{1} {2}".format(self.idx, self.direction, self.idxIn))
 
     def Serialize(self):
         return "  Wall {}(IsSource = {}, IsAdiabatic = {}, IsRadiated = {}, Direction = {}, \
-            R = {:.2f}, C = {:.0f}, T_0 = {:.2f};\n"\
-            .format(self.name, self.is_solarloaded, self.is_adiabatic, self.is_radiated, self.direction, \
-                self.resistance, self.capacity, self.t_0)
+            R = {:.2f}, C = {:.0f}, T_0 = {:.2f});\n"\
+            .format(self.name, str(self.is_solarloaded).lower(), 
+                str(self.is_adiabatic).lower(), str(self.is_radiated).lower(), 
+                self.direction, self.resistance / self.area, self.capacity * self.area, self.t_0)
         
 #################### USER SETUP ####################
 '''
@@ -138,17 +140,17 @@ FRAME
 POLYGON = [[[0, 0], [21, 0], [21, 21], [0, 21], [0, 0]], \
     [[6, 6], [15, 6], [15, 15], [6, 15], [6, 6]]]
 '''
-POLYGON = [[[0, 0], [21, 0], [21, 21], [0, 21], [0, 0]]]
+POLYGON = [[[0, 0], [9, 0], [9, 9], [0, 9], [0, 0]]]
 
 # if you need to fake some day slices do set this as 6, 12, 18 or 24
 FAKE_SLICE = 0
 RADIATED_MODE = True
 
-MODEL_NAME = "new"
-PATH_VIEW_FACTOR = "view_21_3.csv"
+MODEL_NAME = "test"
+PATH_VIEW_FACTOR = "view_9_3.csv"
 PATH_EPW = "../Weather/Shanghai.epw"
 
-MASK_WWR = [0.8]
+MASK_WWR = [0.8, 0]
 MASK_ADIABATIC = [0, 0, 0, 0]
 
 MESH_SCALE = 3
@@ -170,7 +172,7 @@ SHGC = 0.3
 C_WIN = 10000      
 C_WALL = 20000
 # general thermal resistance of wall material (m2*K/W) (thickness / conductance + 1 / convection rate)
-R_WIN = 1
+R_WIN = 0.5
 R_WALL = 1
 
 T_DELTA = 0
@@ -346,26 +348,6 @@ for i in range(len(zonelist)):
 
 # determine the wall types
 for wall in walllist:
-    basept = np.array([wall._coords[0], wall._coords[1]])
-    vec_norm = np.array([wall.normal[0], wall.normal[1]])
-    # skim out horizontal surface
-    if np.linalg.norm(vec_norm) == 0:
-        continue
-    for i in range(len(pts_outer) - 1):
-        if i + 1 <= len(MASK_WWR):
-            if MASK_WWR[i] > 0:
-                vec_edge = pts_outer[i + 1] - pts_outer[i]
-                check_verticle = np.dot(vec_edge, vec_norm)
-                check_parallel = np.cross(pts_outer[i + 1] - basept, pts_outer[i] - basept)
-                if check_verticle == 0 and check_parallel == 0:
-                    wall.is_transparent = True
-                    wall.resistance = R_WIN
-                    wall.capacity = C_WIN
-                else:
-                    wall.is_transparent = False
-                    wall.resistance = R_WALL
-                    wall.capacity = C_WALL
-
     if wall.direction == 2:
         wall.is_adiabatic = True
         if wall._idx_zone_i < tickx * ticky:
@@ -378,6 +360,28 @@ for wall in walllist:
 
     wall.t_0 = temp_init
 
+    print("initial value: R-{} C-{}".format(wall.resistance, wall.capacity))
+    basept = np.array([wall._coords[0], wall._coords[1]])
+    vec_norm = np.array([wall.normal[0], wall.normal[1]])
+    # skim out horizontal surface
+    if np.linalg.norm(vec_norm) == 0:
+        wall.resistance = R_WALL
+        wall.capacity = C_WALL
+        continue
+    for i in range(len(pts_outer) - 1):
+        if i + 1 <= len(MASK_WWR):
+            if MASK_WWR[i] > 0:
+                vec_edge = pts_outer[i + 1] - pts_outer[i]
+                check_verticle = np.dot(vec_edge, vec_norm)
+                check_parallel = np.cross(pts_outer[i + 1] - basept, pts_outer[i] - basept)
+                if check_verticle == 0 and check_parallel == 0:
+                    wall.is_transparent = True
+                    wall.resistance = R_WIN
+                    wall.capacity = C_WIN
+                    break
+                else:
+                    wall.resistance = R_WALL
+                    wall.capacity = C_WALL
 
 #################### VIEW MATRIX #####################
 
@@ -459,6 +463,7 @@ for zone in zonelist:
 for flow in flowlist:
     fo.write(flow.Serialize())
 for wall in walllist:
+    print("{} - {} - C:{}".format(wall.name, wall.is_transparent, wall.capacity))
     # print("Wall-" + str(walllist.index(wall)) + " assigned boundary condition ", end='')
     # type 1, by default the wall is adiabatic without solarload
     fo.write(wall.Serialize())

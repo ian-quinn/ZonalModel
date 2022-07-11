@@ -2,11 +2,11 @@ within VEPZO;
 
 model Zone "Finite volume"
   package Medium = Modelica.Media.Air.SimpleAir "Medium model";
-  parameter Modelica.SIunits.DynamicViscosity mu = 1.85e-3;
-  parameter Modelica.SIunits.Length dx = 1;
-  parameter Modelica.SIunits.Length dy = 1;
-  parameter Modelica.SIunits.Length dz = 1;
-  parameter Medium.Temperature T_0 = Modelica.SIunits.Conversions.from_degC(20);
+  parameter SI.DynamicViscosity mu = 1.85e-3;
+  parameter SI.Length dx = 1;
+  parameter SI.Length dy = 1;
+  parameter SI.Length dz = 1;
+  parameter Medium.Temperature T_0 = SI.Conversions.from_degC(20);
   parameter Medium.AbsolutePressure p_0 = 101325;
   parameter Boolean IsSource = false;
   //parameter Boolean Is3D;
@@ -17,16 +17,16 @@ model Zone "Finite volume"
   VEPZO.AirPort_a port_z1 annotation(Placement(transformation(extent = {{-10, -85}, {10, -65}})));
   VEPZO.AirPort_b port_z2 annotation(Placement(transformation(extent = {{-10, 65}, {10, 85}})));
   VEPZO.HeatPort port_s if IsSource annotation(Placement(visible = true, transformation(origin = {90, -90}, extent = {{-10, -10}, {10, 10}}, rotation = 0), iconTransformation(origin = {90, -100}, extent = {{-10, -10}, {10, 10}}, rotation = 0)));
-  Modelica.SIunits.Volume V = dx * dy * dz;
-  Modelica.SIunits.Velocity u "Characteristic velocity on x-axis direction";
-  Modelica.SIunits.Velocity v "Characteristic velocity on x-axis direction";
-  Modelica.SIunits.Velocity w "Characteristic velocity on z-axis direction";
+  SI.Volume V = dx * dy * dz;
+  SI.Velocity u "Characteristic velocity on x-axis direction";
+  SI.Velocity v "Characteristic velocity on x-axis direction";
+  SI.Velocity w "Characteristic velocity on z-axis direction";
   Medium.BaseProperties medium;
-  Modelica.SIunits.Energy U;
-  Modelica.SIunits.Mass m;
-  Modelica.SIunits.Force F_vx;
-  Modelica.SIunits.Force F_vy;
-  Modelica.SIunits.Force F_vz;
+  SI.Energy U;
+  SI.Mass m;
+  SI.Force F_vx;
+  SI.Force F_vy;
+  SI.Force F_vz;
   // Broadcast
   VEPZO.FBeeperIn i[6] annotation(Placement(visible = true, transformation(origin = {-86.074, 86.886}, extent = {{-10, -10}, {10, 10}}, rotation = 0), iconTransformation(origin = {90, 90}, extent = {{-10, -10}, {10, 10}}, rotation = 0)));
   VEPZO.ZBeeperOut o annotation(Placement(visible = true, transformation(origin = {-174.99, 14.21}, extent = {{-10, -10}, {10, 10}}, rotation = 0), iconTransformation(origin = {90, 70}, extent = {{-10, -10}, {10, 10}}, rotation = 0)));
