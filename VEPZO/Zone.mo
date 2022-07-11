@@ -1,5 +1,4 @@
 within VEPZO;
-
 model Zone "Finite volume"
   package Medium = Modelica.Media.Air.SimpleAir "Medium model";
   parameter SI.DynamicViscosity mu = 1.85e-3;
@@ -16,7 +15,7 @@ model Zone "Finite volume"
   VEPZO.AirPort_b port_y2 annotation(Placement(transformation(extent = {{15, 15}, {35, 35}})));
   VEPZO.AirPort_a port_z1 annotation(Placement(transformation(extent = {{-10, -85}, {10, -65}})));
   VEPZO.AirPort_b port_z2 annotation(Placement(transformation(extent = {{-10, 65}, {10, 85}})));
-  VEPZO.HeatPort port_s if IsSource annotation(Placement(visible = true, transformation(origin = {90, -90}, extent = {{-10, -10}, {10, 10}}, rotation = 0), iconTransformation(origin = {90, -100}, extent = {{-10, -10}, {10, 10}}, rotation = 0)));
+  //VEPZO.HeatPort port_s if IsSource annotation(Placement(visible = true, transformation(origin = {90, -90}, extent = {{-10, -10}, {10, 10}}, rotation = 0), iconTransformation(origin = {90, -100}, extent = {{-10, -10}, {10, 10}}, rotation = 0)));
   SI.Volume V = dx * dy * dz;
   SI.Velocity u "Characteristic velocity on x-axis direction";
   SI.Velocity v "Characteristic velocity on x-axis direction";
@@ -47,9 +46,9 @@ equation
   medium.h = port_y2.h;
   medium.h = port_x1.h;
   medium.h = port_x2.h;
-  if IsSource then
-    medium.T = port_s.T;
-  end if;
+  //if IsSource then
+    //medium.T = port_s.T;
+  //end if;
   //if Is3D then
   //  medium.p = port_y1.p;
   //  medium.p = port_y2.p;
@@ -61,11 +60,11 @@ equation
   U = m * medium.u;
   // Mass balance
   der(m) = port_z1.m_flow + port_z2.m_flow + port_x1.m_flow + port_x2.m_flow + port_y1.m_flow + port_y2.m_flow;
-  if IsSource then
-    der(U) = port_z1.H_flow + port_z2.H_flow + port_x1.H_flow + port_x2.H_flow + port_y1.H_flow + port_y2.H_flow + port_s.Q_flow;
-  else
+  //if IsSource then
+    //der(U) = port_z1.H_flow + port_z2.H_flow + port_x1.H_flow + port_x2.H_flow + port_y1.H_flow + port_y2.H_flow + port_s.Q_flow;
+  //else
     der(U) = port_z1.H_flow + port_z2.H_flow + port_x1.H_flow + port_x2.H_flow + port_y1.H_flow + port_y2.H_flow;
-  end if;
+  //end if;
   // Characteristic velocity u
   if port_x1.m_flow > 0 then
     if port_x2.m_flow > 0 then
@@ -123,5 +122,5 @@ equation
   o.F_vy = F_vy;
   o.F_vz = F_vz;
   //o.T = medium.T;
-  annotation(experiment(StopTime = 3600, Interval = 1), Icon(coordinateSystem(extent = {{-100, -100}, {100, 100}}, preserveAspectRatio = true, initialScale = 0.1, grid = {10, 10}), graphics = {Rectangle(visible = true, origin = {-25, -25}, fillColor = {255, 255, 255}, extent = {{-75, -75}, {75, 75}}), Rectangle(visible = true, origin = {25, 25}, fillColor = {255, 255, 255}, extent = {{-75, -75}, {75, 75}}), Line(visible = true, origin = {-75, 75}, points = {{25, 25}, {-25, -25}}), Line(visible = true, origin = {75, 75}, points = {{25, 25}, {-25, -25}}), Line(visible = true, origin = {75, -75}, points = {{25, 25}, {-25, -25}}), Line(visible = true, origin = {-75, -75}, points = {{25, 25}, {-25, -25}}), Text(visible = true, origin = {0, -130}, textColor = {64, 64, 64}, extent = {{-150, 110}, {150, 150}}, textString = "%name")}));
+  annotation(experiment(StopTime = 3600, Interval = 1), Icon(coordinateSystem(extent = {{-100, -100}, {100, 100}}, preserveAspectRatio = true, initialScale = 0.1, grid = {10, 10}), graphics={  Rectangle(visible = true, origin = {-25, -25}, fillColor = {255, 255, 255}, extent = {{-75, -75}, {75, 75}}), Rectangle(visible = true, origin = {25, 25}, fillColor = {255, 255, 255}, extent = {{-75, -75}, {75, 75}}), Line(visible = true, origin = {-75, 75}, points = {{25, 25}, {-25, -25}}), Line(visible = true, origin = {75, 75}, points = {{25, 25}, {-25, -25}}), Line(visible = true, origin = {75, -75}, points = {{25, 25}, {-25, -25}}), Line(visible = true, origin = {-75, -75}, points = {{25, 25}, {-25, -25}}), Text(visible = true, origin = {0, -130}, textColor = {64, 64, 64}, extent = {{-150, 110}, {150, 150}}, textString = "%name")}));
 end Zone;

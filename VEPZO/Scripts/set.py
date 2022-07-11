@@ -88,8 +88,8 @@ class Flow(object):
         return "  Flow {}(Direction = {});\n".format(self.name, self.direction)
 
 class Wall(object):
-    resistance = 9
-    capacity = 99999
+    resistance = 1
+    capacity = 10000
     t_0 = 293.15
     is_solarloaded = False
     is_adiabatic = False
@@ -150,7 +150,7 @@ MODEL_NAME = "test"
 PATH_VIEW_FACTOR = "view_9_3.csv"
 PATH_EPW = "../Weather/Shanghai.epw"
 
-MASK_WWR = [0.8, 0]
+MASK_WWR = [0.8]
 MASK_ADIABATIC = [0, 0, 0, 0]
 
 MESH_SCALE = 3
@@ -473,9 +473,12 @@ for wall in walllist:
         fo.write("  Modelica.Blocks.Sources.TimeTable solarBeam{0}(table = [{1}]);\n"
             .format(wall._idx, ZipTimeTable(timestamps, solarseries[wall._idx_zone_i])))
         fo.write("  Modelica.Thermal.HeatTransfer.Sources.PrescribedHeatFlow loadBeam{0};\n".format(wall._idx))
-
+    else:
+        fo.write("  Adiabatic adiabaticS{0};\n".format(wall._idx))
     # type 3, perimeter, assigned prescribed environment temperature
-    if not wall.is_adiabatic:
+    if wall.is_adiabatic:
+        fo.write("  Adiabatic adiabaticT{0};\n".format(wall._idx))
+    else:
         fo.write("  Modelica.Thermal.HeatTransfer.Sources.PrescribedTemperature temp{};\n".format(wall._idx))
         fo.write("  Modelica.Thermal.HeatTransfer.Components.ThermalResistor wallR{}(R = {:.2f});\n"
             .format(wall._idx, 1 / 7.6 / wall.area))
@@ -519,10 +522,12 @@ for zone in zonelist:
 for wall in walllist:
     fo.write("  connect({0}.i, {1}.o);\n".format(wall.name, "zone" + str(wall._idx_zone_i)))
     adjMaskValue = RetrieveAdjacencyMask(wall._idx_zone_i, tickx, ticky, mesh_mask, wall._idx_port_i)
-    if wall._idx_zone_i < tickx * ticky and wall.direction == 2:
+    if wall.is_solarloaded:
         fo.write("  connect(wall{0}.port_s, loadBeam{1}.port);\n".format(wall._idx, wall._idx))
         fo.write("  connect(solarBeam{0}.y, loadBeam{1}.Q_flow);\n".format(wall._idx, wall._idx))
-    elif wall.direction != 2 and adjMaskValue == 0:
+    else:
+        fo.write("  connect(wall{0}.port_s, adiabaticS{1}.port);\n".format(wall._idx, wall._idx))
+    if wall.direction != 2 and adjMaskValue == 0:
         fo.write("  connect(temp{0}.T, ambient.y);\n".format(wall._idx))
         fo.write("  connect(temp{0}.port, wallR{1}.port_b);\n".format(wall._idx, wall._idx))
         fo.write("  connect(wallR{0}.port_a, wall{1}.port_t);\n".format(wall._idx, wall._idx))
@@ -530,7 +535,7 @@ for wall in walllist:
         fo.write("  connect(bound{0}.port_a, wall{1}.port_t);\n".format(wall._idx, wall._idx))
         # fo.write("  connect(wallC{0}.port, wallR{1}.port_b);\n".format(wall._idx, wall._idx))
     else:
-        pass
+        fo.write("  connect(adiabaticT{0}.port, wall{1}.port_t);\n".format(wall._idx, wall._idx))
 
     # to radiation box
     if RADIATED_MODE:
