@@ -12,7 +12,7 @@ model HybriZo
   Modelica.Thermal.HeatTransfer.Sources.PrescribedHeatFlow loadEquip11;
   Zone zone12(IsSource = true, dx = 3.0, dy = 3.0, dz = 1.0, T_0 = 303.15);
   Modelica.Thermal.HeatTransfer.Sources.PrescribedHeatFlow loadEquip12;
-  Modelica.Blocks.Sources.TimeTable equipLoadSchedule12(table = [0, 20.00; 3600, 20.00; 7200, 20.00; 10800, 20.00; 14400, 20.00; 18000, 20.00; 21600, 20.00; 25200, 16.00; 28800, 10.00; 32400, 0.00; 36000, 0.00; 39600, 0.00; 43200, 10.00; 46800, 10.00; 50400, 4.00; 54000, 0.00; 57600, 0.00; 61200, 0.00; 64800, 0.00; 68400, 10.00; 72000, 10.00; 75600, 10.00; 79200, 20.00; 82800, 20.00]);
+  Modelica.Blocks.Sources.TimeTable equipLoadSchedule12(table = [0, 200.00; 3600, 200.00; 7200, 200.00; 10800, 200.00; 14400, 200.00; 18000, 200.00; 21600, 200.00; 25200, 160.00; 28800, 100.00; 32400, 0.00; 36000, 0.00; 39600, 0.00; 43200, 100.00; 46800, 100.00; 50400, 40.00; 54000, 0.00; 57600, 0.00; 61200, 0.00; 64800, 0.00; 68400, 100.00; 72000, 100.00; 75600, 100.00; 79200, 200.00; 82800, 200.00]);
   Zone zone13(IsSource = false, dx = 3.0, dy = 3.0, dz = 1.0, T_0 = 303.15);
   Modelica.Thermal.HeatTransfer.Sources.PrescribedHeatFlow loadEquip13;
   Zone zone16(IsSource = false, dx = 3.0, dy = 3.0, dz = 1.0, T_0 = 303.15);

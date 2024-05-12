@@ -1,4 +1,4 @@
-within VEPZO;
+within VEPZO.Utilities;
 function MatrixConverter
   "Function to import trajectory result files and write them as Matlab compatible .mat files"
   input String filename="mrt_singapore.mat" "File to be converted";

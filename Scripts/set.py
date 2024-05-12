@@ -189,7 +189,7 @@ TIME_END = datetime.datetime.strptime("2022-07-23 00:00:00", "%Y-%m-%d %H:%M:%S"
 TIME_DELTA = datetime.timedelta(seconds=TIME_STEP)
 
 # presume all equipment has the same load
-EQUIP_LOAD = 20
+EQUIP_LOAD = 200
 # a 24h schedule for overall internal load
 # EQUIP_SCHE = [0, 0, 0, 0, 0, 0, 0, 0.2, 0.5, 1, 1, 1, 0.5, 0.5, 0.8, 1, 1, 1, 1, 0.5, 0.5, 0.5, 0, 0]
 EQUIP_SCHE = [1, 1, 1, 1, 1, 1, 1, 0.8, 0.5, 0, 0, 0, 0.5, 0.5, 0.2, 0, 0, 0, 0, 0.5, 0.5, 0.5, 1, 1]
