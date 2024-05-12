@@ -1,34 +1,34 @@
 within VEPZO;
 model Zone "Finite volume"
   package Medium = Modelica.Media.Air.SimpleAir "Medium model";
-  parameter SI.DynamicViscosity mu = 1.85e-3;
-  parameter SI.Length dx = 1;
-  parameter SI.Length dy = 1;
-  parameter SI.Length dz = 1;
-  parameter Medium.Temperature T_0 = SI.Conversions.from_degC(20);
-  parameter Medium.AbsolutePressure p_0 = 101325;
-  parameter Boolean IsSource = false;
+  parameter SI.DynamicViscosity mu = 1.85e-3 annotation(HideResult=true);
+  parameter SI.Length dx = 1 annotation(HideResult=true);
+  parameter SI.Length dy = 1 annotation(HideResult=true);
+  parameter SI.Length dz = 1 annotation(HideResult=true);
+  parameter Medium.Temperature T_0 = 293.15 annotation(HideResult=true);
+  parameter Medium.AbsolutePressure p_0 = 101325 annotation(HideResult=true);
+  parameter Boolean IsSource = false annotation(HideResult=true);
   //parameter Boolean Is3D;
-  VEPZO.AirPort_a port_x1 annotation(Placement(transformation(extent = {{-85, -10}, {-65, 10}})));
-  VEPZO.AirPort_b port_x2 annotation(Placement(transformation(extent = {{65, -10}, {85, 10}})));
-  VEPZO.AirPort_a port_y1 annotation(Placement(transformation(extent = {{-35, -35}, {-15, -15}})));
-  VEPZO.AirPort_b port_y2 annotation(Placement(transformation(extent = {{15, 15}, {35, 35}})));
-  VEPZO.AirPort_a port_z1 annotation(Placement(transformation(extent = {{-10, -85}, {10, -65}})));
-  VEPZO.AirPort_b port_z2 annotation(Placement(transformation(extent = {{-10, 65}, {10, 85}})));
-  //VEPZO.HeatPort port_s if IsSource annotation(Placement(visible = true, transformation(origin = {90, -90}, extent = {{-10, -10}, {10, 10}}, rotation = 0), iconTransformation(origin = {90, -100}, extent = {{-10, -10}, {10, 10}}, rotation = 0)));
-  SI.Volume V = dx * dy * dz;
-  SI.Velocity u "Characteristic velocity on x-axis direction";
-  SI.Velocity v "Characteristic velocity on x-axis direction";
-  SI.Velocity w "Characteristic velocity on z-axis direction";
+  VEPZO.AirPort_a port_x1 annotation(HideResult=true, Placement(transformation(extent = {{-85, -10}, {-65, 10}})));
+  VEPZO.AirPort_b port_x2 annotation(HideResult=true, Placement(transformation(extent = {{65, -10}, {85, 10}})));
+  VEPZO.AirPort_a port_y1 annotation(HideResult=true, Placement(transformation(extent = {{-35, -35}, {-15, -15}})));
+  VEPZO.AirPort_b port_y2 annotation(HideResult=true, Placement(transformation(extent = {{15, 15}, {35, 35}})));
+  VEPZO.AirPort_a port_z1 annotation(HideResult=true, Placement(transformation(extent = {{-10, -85}, {10, -65}})));
+  VEPZO.AirPort_b port_z2 annotation(HideResult=true, Placement(transformation(extent = {{-10, 65}, {10, 85}})));
+  VEPZO.HeatPort port_s annotation(Placement(visible = true, transformation(origin = {90, -90}, extent = {{-10, -10}, {10, 10}}, rotation = 0), iconTransformation(origin = {90, -100}, extent = {{-10, -10}, {10, 10}}, rotation = 0)));
+  SI.Volume V = dx * dy * dz annotation(HideResult=true);
+  SI.Velocity u "Characteristic velocity on x-axis direction" annotation(HideResult=true);
+  SI.Velocity v "Characteristic velocity on x-axis direction" annotation(HideResult=true);
+  SI.Velocity w "Characteristic velocity on z-axis direction" annotation(HideResult=true);
   Medium.BaseProperties medium;
-  SI.Energy U;
-  SI.Mass m;
-  SI.Force F_vx;
-  SI.Force F_vy;
-  SI.Force F_vz;
+  SI.Energy U annotation(HideResult=true);
+  SI.Mass m annotation(HideResult=true);
+  SI.Force F_vx annotation(HideResult=true);
+  SI.Force F_vy annotation(HideResult=true);
+  SI.Force F_vz annotation(HideResult=true);
   // Broadcast
-  VEPZO.FBeeperIn i[6] annotation(Placement(visible = true, transformation(origin = {-86.074, 86.886}, extent = {{-10, -10}, {10, 10}}, rotation = 0), iconTransformation(origin = {90, 90}, extent = {{-10, -10}, {10, 10}}, rotation = 0)));
-  VEPZO.ZBeeperOut o annotation(Placement(visible = true, transformation(origin = {-174.99, 14.21}, extent = {{-10, -10}, {10, 10}}, rotation = 0), iconTransformation(origin = {90, 70}, extent = {{-10, -10}, {10, 10}}, rotation = 0)));
+  VEPZO.FBeeperIn i[6] annotation(HideResult=true, Placement(visible = true, transformation(origin = {-86.074, 86.886}, extent = {{-10, -10}, {10, 10}}, rotation = 0), iconTransformation(origin = {90, 90}, extent = {{-10, -10}, {10, 10}}, rotation = 0)));
+  VEPZO.ZBeeperOut o annotation(HideResult=true, Placement(visible = true, transformation(origin = {-174.99, 14.21}, extent = {{-10, -10}, {10, 10}}, rotation = 0), iconTransformation(origin = {90, 70}, extent = {{-10, -10}, {10, 10}}, rotation = 0)));
 initial equation
   medium.p = p_0;
   medium.T = T_0;
@@ -46,9 +46,7 @@ equation
   medium.h = port_y2.h;
   medium.h = port_x1.h;
   medium.h = port_x2.h;
-  //if IsSource then
-    //medium.T = port_s.T;
-  //end if;
+  medium.T = port_s.T;
   //if Is3D then
   //  medium.p = port_y1.p;
   //  medium.p = port_y2.p;
@@ -61,9 +59,9 @@ equation
   // Mass balance
   der(m) = port_z1.m_flow + port_z2.m_flow + port_x1.m_flow + port_x2.m_flow + port_y1.m_flow + port_y2.m_flow;
   //if IsSource then
-    //der(U) = port_z1.H_flow + port_z2.H_flow + port_x1.H_flow + port_x2.H_flow + port_y1.H_flow + port_y2.H_flow + port_s.Q_flow;
+    der(U) = port_z1.H_flow + port_z2.H_flow + port_x1.H_flow + port_x2.H_flow + port_y1.H_flow + port_y2.H_flow + port_s.Q_flow;
   //else
-    der(U) = port_z1.H_flow + port_z2.H_flow + port_x1.H_flow + port_x2.H_flow + port_y1.H_flow + port_y2.H_flow;
+    //der(U) = port_z1.H_flow + port_z2.H_flow + port_x1.H_flow + port_x2.H_flow + port_y1.H_flow + port_y2.H_flow;
   //end if;
   // Characteristic velocity u
   if port_x1.m_flow > 0 then

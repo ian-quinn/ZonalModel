@@ -1,3 +1,5 @@
-VEPZO/Scripts/*.csv
-VEPZO/Scripts/__pycache__
-VEPZO/Weather/*.epw
+Scripts/__pycache__
+.idea/
+*.mat
+*.csv
+*.epw

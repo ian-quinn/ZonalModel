@@ -1,27 +1,26 @@
 within VEPZO;
-
 model Flow "Virtual pipe connecting sub-zones"
   package Medium = Modelica.Media.Air.SimpleAir "Medium model";
-  parameter Integer Direction "Mark the direction of the flow";
-  constant Real g(unit = "m/s2") = 9.801 "Gravitational acceleration";
-  AirPort_a port_a "Inlet port by default" annotation(Placement(transformation(extent = {{-10, 80}, {10, 100}})));
-  AirPort_b port_b "Outlet port by default" annotation(Placement(transformation(extent = {{-10, -80}, {10, -100}})));
-  Medium.BaseProperties medium_a "Medium at port_a";
-  Medium.BaseProperties medium_b "Medium at port_b";
-  Medium.MassFlowRate m_flow "Mass flow rate from port_a to port_b";
-  SI.Area A = i[1].dx * i[1].dz "Section plane area";
-  SI.Density d "Mean density";
-  SI.Pressure dp "Pressure drop from port_a to port_b";
-  SI.Velocity velocity "Velocity of the flow";
-  SI.Force F_m "Momentum force";
-  SI.Force F_g "Gravitational force";
-  SI.Force F_v "Viscos Force";
-  Real gradU "Gradient of w velocity along x-axis";
-  Real gradV "Gradient of w velocity along x-axis";
-  Real gradW "Gradient of u velocity along z-axis";
+  parameter Integer Direction "Mark the direction of the flow" annotation(HideResult=true);
+  constant Real g(unit = "m/s2") = 9.801 "Gravitational acceleration" annotation(HideResult=true);
+  AirPort_a port_a "Inlet port by default" annotation(HideResult=true, Placement(transformation(extent = {{-10, 80}, {10, 100}})));
+  AirPort_b port_b "Outlet port by default" annotation(HideResult=true, Placement(transformation(extent = {{-10, -80}, {10, -100}})));
+  Medium.BaseProperties medium_a "Medium at port_a" annotation(HideResult=true);
+  Medium.BaseProperties medium_b "Medium at port_b" annotation(HideResult=true);
+  Medium.MassFlowRate m_flow "Mass flow rate from port_a to port_b" annotation(HideResult=true);
+  SI.Area A = i[1].dx * i[1].dz "Section plane area" annotation(HideResult=true);
+  SI.Density d "Mean density" annotation(HideResult=true);
+  SI.Pressure dp "Pressure drop from port_a to port_b" annotation(HideResult=true);
+  SI.Velocity velocity "Velocity of the flow" annotation(HideResult=true);
+  SI.Force F_m "Momentum force" annotation(HideResult=true);
+  SI.Force F_g "Gravitational force" annotation(HideResult=true);
+  SI.Force F_v "Viscos Force" annotation(HideResult=true);
+  Real gradU "Gradient of u velocity along x-axis" annotation(HideResult=true);
+  Real gradV "Gradient of v velocity along y-axis" annotation(HideResult=true);
+  Real gradW "Gradient of w velocity along z-axis" annotation(HideResult=true);
   // Broadcast
-  ZBeeperIn i[2] "Gather information of adjacent 2 zones" annotation(Placement(visible = true, transformation(origin = {123.63, 65.774}, extent = {{-10, -10}, {10, 10}}, rotation = 0), iconTransformation(origin = {90, 90}, extent = {{-10, -10}, {10, 10}}, rotation = 0)));
-  FBeeperOut o annotation(Placement(visible = true, transformation(origin = {-180, 11.693}, extent = {{-10, -10}, {10, 10}}, rotation = 0), iconTransformation(origin = {90, 70}, extent = {{-10, -10}, {10, 10}}, rotation = 0)));
+  ZBeeperIn i[2] "Gather information of adjacent 2 zones" annotation(HideResult=true, Placement(visible = true, transformation(origin = {123.63, 65.774}, extent = {{-10, -10}, {10, 10}}, rotation = 0), iconTransformation(origin = {90, 90}, extent = {{-10, -10}, {10, 10}}, rotation = 0)));
+  FBeeperOut o annotation(HideResult=true, Placement(visible = true, transformation(origin = {-180, 11.693}, extent = {{-10, -10}, {10, 10}}, rotation = 0), iconTransformation(origin = {90, 70}, extent = {{-10, -10}, {10, 10}}, rotation = 0)));
 initial equation
   //d = 0.5 * (medium_a.d + medium_b.d);
 equation
@@ -87,5 +86,6 @@ equation
   o.gradU = gradU;
   o.gradV = gradV;
   o.gradW = gradW;
-  annotation(experiment(StopTime = 100, Interval = 1), Diagram(coordinateSystem(extent = {{-150, -90}, {150, 90}}, preserveAspectRatio = true, initialScale = 0.1, grid = {5, 5})), Icon(coordinateSystem(extent = {{-100, -100}, {100, 100}}, preserveAspectRatio = true, initialScale = 0.1, grid = {10, 10}), graphics = {Text(visible = true, origin = {50, 0}, rotation = -270, textColor = {64, 64, 64}, extent = {{-150, 110}, {150, 150}}, textString = "%name"), Rectangle(visible = true, fillColor = {255, 255, 255}, fillPattern = FillPattern.Backward, extent = {{-50, -100}, {50, 100}}), Line(visible = true, points = {{0, 50}, {0, -50}}), Line(visible = true, origin = {-5, -45}, points = {{5, -5}, {-5, 5}}), Line(visible = true, origin = {5, -45}, points = {{-5, -5}, {5, 5}})}));
+  annotation(experiment(StopTime = 100, Interval = 1), Diagram(coordinateSystem(extent = {{-150, -90}, {150, 90}}, preserveAspectRatio = true, initialScale = 0.1, grid = {5, 5})), Icon(coordinateSystem(extent = {{-100, -100}, {100, 100}}, preserveAspectRatio = true, initialScale = 0.1, grid = {10, 10}), graphics={  Text(visible = true, origin = {50, 0}, rotation = -270, textColor = {64, 64, 64}, extent = {{-150, 110}, {150, 150}}, textString = "%name"), Rectangle(visible = true, fillColor = {255, 255, 255},
+            fillPattern =                                                                                                                                                                                                        FillPattern.Backward, extent = {{-50, -100}, {50, 100}}), Line(visible = true, points = {{0, 50}, {0, -50}}), Line(visible = true, origin = {-5, -45}, points = {{5, -5}, {-5, 5}}), Line(visible = true, origin = {5, -45}, points = {{-5, -5}, {5, 5}})}));
 end Flow;
