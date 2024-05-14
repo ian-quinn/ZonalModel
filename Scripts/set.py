@@ -4,7 +4,7 @@ import datetime
 import numpy as np
 from mesh import get_mesh
 from fake import fake_input
-from rad import get_view_factor, get_mrt_factor
+from rad import get_view_factor, get_mrt_factor, calc_view_factor
 
 
 # assistants
@@ -160,6 +160,7 @@ POLYGON = [[[0, 0], [21, 0], [21, 21], [0, 21], [0, 0]],
     [[6, 6], [15, 6], [15, 15], [6, 15], [6, 6]]]
 """
 
+# POLYGON = [[[0, 0], [9, 0], [9, 9], [0, 9], [0, 0]]]
 POLYGON = [[[0, 0], [9, 0], [9, 9], [0, 9], [0, 0]]]
 MESH_SCALE = 3
 # the wall boundary mask follows each edge in POLYGON[0]
@@ -457,7 +458,8 @@ if RADIATED_MODE:
     if PATH_VIEW_FACTOR:
         view_matrix = np.genfromtxt(PATH_VIEW_FACTOR, delimiter=',')
     else:
-        view_matrix = get_view_factor(wall_basepts, wall_normals, dims, discretization_num)
+        # view_matrix = get_view_factor(wall_basepts, wall_normals, dims, discretization_num)
+        view_matrix = calc_view_factor(wall_basepts, wall_normals, dims)
 
 mrt_matrix = get_mrt_factor(wall_basepts, wall_normals, dims, mesh_mask, discretization_num, mrt_measure_height)
 
